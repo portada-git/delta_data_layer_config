@@ -10,6 +10,12 @@
       "nullable": false,
       "for_cleaning":["not_cleanable"]
     },
+    "temp_key": {
+      "type": "string",
+      "description": "Identificador único provisional",
+      "nullable": false,
+      "for_cleaning":["not_cleanable"]
+    },
     "model_version": {
       "type": "string",
       "description": "Modelo de datos usado en una entrada.",
@@ -23,31 +29,63 @@
       "minLength": 2,
       "maxLength": 2,
       "nullable": false,
-      "for_cleaning":["not_digits", "one_word"]
+      "for_cleaning":["not_cleanable"]
+
     },
     "publication_date": {
       "type": "string",
       "description": "Fecha en la que se publicó la noticia de la entrada.",
       "format": "date",
-      "nullable": false
+      "nullable": false,
+      "for_cleaning":["not_cleanable"]
+
+    },
+    "publication_edition": {
+      "type": "string",
+      "description": "Edición en la que se publicó la noticia de la entrada.",
+      "minLength": 1,
+      "maxLength": 1,
+      "nullable": false,
+      "for_cleaning":["not_cleanable"]
+    },
+    "news_section":{
+      "type": "string",
+      "description": "Sección de la noticia.",
+      "nullable": false,
+      "for_cleaning":["not_cleanable"]
     },
     "parsed_text": {
       "type": "string",
       "description": "Es el fragmento texto correspondiente a la entrada extraída publicado en el periodico, fecha y edición indicada.",
       "nullable": false,
-      "for_cleaning":["paragraph"]
+      "for_cleaning":["paragraph"],
+      "fill_with": {"type": "replace_if_not_exist", "from": "input_text"}
     },
     "travel_departure_date": {
       "type": "string",
       "description": "Fecha de salida del puerto en formato YYYY-MM-DD.",
       "format": "date",
-      "nullable": true
+      "nullable": true,
+      "calculable_if_null": {"operation": "decrement_data", "parameters":{"origin_date": "travel_arrival_date", "decrement": "travel_duration_value", "decrement_unit": "travel_duration_unit"}}
     },
     "travel_arrival_date": {
       "type": "string",
       "description": "Fecha de llegada al puerto en formato YYYY-MM-DD.",
       "format": "date",
       "nullable": true
+    },
+    "travel_duration_value": {
+      "type": "number",
+      "description": "Duración del viaje en días o horas.",
+      "nullable": true,
+      "calculable_if_null": {"operation":  "data_difference", "parameters":{"origin_date": "travel_departure_date", "final_date":  "travel_arrival_date"}}
+    },
+    "travel_duration_unit": {
+      "type": "string",
+      "description": "Unidad de medida de la duración del viaje.",
+      "nullable": true,
+      "for_cleaning":["accepted_abbreviations", "not_digits", "one_word"],
+      "fill_with": {"type": "replace_if_not_exist", "from": "LIT('d.')"}
     },
     "travel_departure_port": {
       "type": "string",
@@ -72,6 +110,12 @@
             "format": "date",
             "description": "Fecha de llegada al puerto de escala.",
             "nullable": true
+          },
+          "port_of_call_departure_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Fecha de llegada al puerto de escala.",
+            "nullable": true
           }
         },
         "required": [
@@ -91,6 +135,9 @@
                 },
                 "port_of_call_arrival_date": {
                   "type": "string"
+                },
+                "port_of_call_departure_date": {
+                  "type": "string"
                 }
               }
             },
@@ -104,6 +151,10 @@
                 "port_of_call_arrival_date": {
                   "type": "column",
                   "value": "old_value.port_of_call_arrival_date"
+                },
+                "port_of_call_departure_date": {
+                  "type": "column",
+                  "value": "old_value.port_of_call_departure_date"
                 }
               }
             }
@@ -119,6 +170,10 @@
                   "value": "old_value"
                 },
                 "port_of_call_arrival_date": {
+                  "type": "literal",
+                  "value": null
+                },
+                "port_of_call_departure_date": {
                   "type": "literal",
                   "value": null
                 }
@@ -137,11 +192,21 @@
                 "port_of_call_arrival_date": {
                   "type": "literal",
                   "value": null
+                },
+                "port_of_call_departure_date": {
+                  "type": "literal",
+                  "value": null
                 }
               }
             }
         }
       }
+    },
+    "travel_arrival_port": {
+      "type": "string",
+      "description": "Puerto al que llegó el barco.",
+      "nullable": true,
+      "for_cleaning":["accepted_idem", "not_digits"]
     },
     "ship_type": {
       "type": "string",
@@ -163,7 +228,8 @@
       "type": "string",
       "description": "Especifica las unidades en las que está expresado las dimensiones del buque. Normalmente toneladas, simbolizadas por la abreviación 't.'",
       "nullable": true,
-      "for_cleaning":["accepted_abbreviations", "not_digits", "one_word"]
+      "for_cleaning":["accepted_abbreviations", "not_digits", "one_word"],
+      "fill_with": {"type": "replace_if_not_exist", "from": "ship_tons_units"}
     },
     "ship_flag": {
       "type": "string",
@@ -180,15 +246,24 @@
     "master_name": {
       "type": "string",
       "description": "Nombre del responsable a bordo.",
-      "nullable": true,
-      "for_cleaning":["not_digits"]
-
+      "nullable": true
     },
     "broker_name": {
       "type": "string",
       "description": "Nombre del agente marítimo.",
       "nullable": true,
       "for_cleaning":["not_digits"]
+    },
+    "ship_agent_name": {
+      "type": "string",
+      "description": "Nombre del agente marítimo.",
+      "nullable": true,
+      "for_cleaning":["not_digits"]
+    },
+    "ship_agent_explicit": {
+      "type": "boolean",
+      "description": "Indica si el agente marítimo se indica de forma explícita en el texto.",
+      "nullable": true
     },
     "cargo_list": {
       "type": "array",
@@ -201,7 +276,7 @@
             "type": "string",
             "description": "Es el propietario de la carga o aquella persona a quien dicha carga va destinada.",
             "nullable": true,
-            "for_cleaning":["not_digits"]
+            "for_cleaning":["not_digits", "accepted_idem"]
           },
           "cargo": {
             "type": "array",
@@ -213,7 +288,8 @@
                 "cargo_quantity": {
                   "type": "number",
                   "description": "Representa la cantidad total de la carga en forma numérica. Se expresa como cadena de caracteres para evitar errores en el JSON si en la cantidad figuran letras en lugar de números debido a errores tipográficos o de transcripció del OCR. Si en la transcrición indicara, por ejemplo '2I pipas aceite', en este campo deberá trasladarse el valor 2I. Si el número no está presente, debe asignarse el valor null.",
-                  "nullable": true
+                  "nullable": true,
+                  "for_cleaning": ["accepted_idem"]
                 },
                 "cargo_unit": {
                   "type": "string",
@@ -235,7 +311,39 @@
         },
         "required": ["cargo_merchant_name", "cargo"],
         "additionalProperties": false
-      }
+      },
+      "fill_with": [
+          {
+            "type": "add_array_item",
+            "from": [
+                null,
+                {
+                  "type": "add_array_item",
+                  "to": ["cargo_quantity", "cargo_unit", "cargo_commodity"],
+                  "from": ["passengers", null, "LIT('pasajeros')"]
+                }
+            ],
+            "to": ["cargo_merchant_name", "cargo"]
+          },
+          {
+            "type": "add_array_item",
+            "from": [
+                null,
+                {
+                  "type": "add_array_item",
+                  "to": ["cargo_quantity", "cargo_unit", "cargo_commodity"],
+                  "from": [null, null, "LIT('en lastre')"]
+                }
+            ],
+            "to": ["cargo_merchant_name", "cargo"],
+            "condition": { "column": "in_ballast", "op": "==", "value": { "type": "l", "value": true } }
+          }
+      ]
+    },
+    "crew_number": {
+      "type": "integer",
+      "description": "Número de tripulantes.",
+      "nullable": true
     },
     "quarantine": {
       "type": "boolean",
@@ -251,7 +359,8 @@
       "type": "string",
       "description": "Notas o comentarios adicionales que aborden aspectos no contemplados en las variables registradas, proporcionando información contextual o relevante sobre el evento.",
       "nullable": true,
-      "for_cleaning":["paragraph"]
+      "for_cleaning":["paragraph"],
+      "fill_with": {"type": "replace_if_not_exist", "from": "ai_observations", "drop_origin": true}
     }
   },
   "required": [
@@ -259,6 +368,7 @@
     "travel_arrival_date",
     "travel_departure_port",
     "travel_port_of_call_list",
+    "travel_arrival_port",
     "ship_type",
     "ship_name",
     "ship_tons_capacity",
@@ -272,5 +382,9 @@
     "forced_arrival",
     "obs"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "order_and_partitions": {
+    "order": ["publication_name", "publication_date", "publication_edition", "entry_id"],
+    "partitions": ["publication_name", "publication_date", "publication_edition"]
+  }
 }
