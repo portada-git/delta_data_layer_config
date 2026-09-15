@@ -32,6 +32,26 @@
       "for_cleaning":["not_cleanable"]
 
     },
+    "publication_year": {
+      "type": "string",
+      "description": "Año en la que se publicó la noticia de la entrada.",
+      "format": "integer",
+      "minLength": 4,
+      "maxLength": 4,
+      "nullable": false,
+      "for_cleaning":["not_cleanable"],
+      "fill_with": {
+          "type": "replace_if_not_exist",
+          "from": {
+            "type": "expr",
+            "value": "substring(publication_date, 1, 4)"
+          },
+          "condition": {
+            "column": "publication_date",
+            "op": "isNotNull"
+          }
+      }
+    },
     "publication_date": {
       "type": "string",
       "description": "Fecha en la que se publicó la noticia de la entrada.",
@@ -360,7 +380,7 @@
       "description": "Notas o comentarios adicionales que aborden aspectos no contemplados en las variables registradas, proporcionando información contextual o relevante sobre el evento.",
       "nullable": true,
       "for_cleaning":["paragraph"],
-      "fill_with": {"type": "replace_if_not_exist", "from": "ai_observations", "drop_origin": true}
+      "fill_with": {"type": "replace_if_not_exist", "from": "ai_observations"}
     }
   },
   "required": [

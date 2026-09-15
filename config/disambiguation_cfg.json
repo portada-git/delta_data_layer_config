@@ -1,0 +1,234 @@
+{
+  "version": 3,
+  "normalize": false,
+  "labeled_data_path": "revision.ship_entries",
+  "general_config_algorithms": {
+    "levenshtein": {
+      "class": "LevenshteinAlgorithm",
+      "thresholds": [
+        0.80,
+        0.70
+      ],
+      "params": {}
+    },
+    "jaro_winkler": {
+      "class": "JaroWinklerAlgorithm",
+      "thresholds": [
+        0.85
+      ],
+      "params": {}
+    },
+    "levenshtein_jaro_winkler": {
+      "class": "LevenshteinJaroWinAlgorithm",
+      "thresholds": [
+        0.88,
+        0.75
+      ],
+      "params": {
+        "lev_weight": 0.4,
+        "jaro_weight": 0.6
+      }
+    },
+    "root_levenshtein": {
+      "class": "RootLevenshteinAlgorithm",
+      "thresholds": [
+        0.8,
+        0.7
+      ],
+      "params": {
+        "max_suffix_length": 2,
+        "min_root_length": 6
+      }
+    },
+    "ngram_2": {
+      "class": "NgramAlgorithm",
+      "thresholds": [
+        0.75
+      ],
+      "params": {
+        "n": 2
+      }
+    },
+    "ngram_3": {
+      "class": "NgramAlgorithm",
+      "thresholds": [
+        0.75
+      ],
+      "params": {
+        "n": 3
+      }
+    },
+    "ngram_4": {
+      "class": "NgramAlgorithm",
+      "thresholds": [
+        0.75
+      ],
+      "params": {
+        "n": 4
+      }
+    },
+    "phonetic_dm": {
+      "class": "PhoneticDmAlgorithm",
+      "thresholds": [
+        0.9,
+        0.75
+      ],
+      "params": {}
+    },
+    "soundex": {
+      "class": "SoundexAlgorithm",
+      "thresholds": [
+        0.9
+      ],
+      "params": {}
+    },
+    "fasttext": {
+      "class": "FastTextAlgorithm",
+      "thresholds": [
+        0.8,
+        0.6
+      ],
+      "params": {
+        "model_path": "models/fasttext/cc.es.300.bin"
+      }
+    },
+    "byt5": {
+      "class": "ByT5Algorithm",
+      "thresholds": [
+        0.9,
+        0.7
+      ],
+      "params": {
+        "model_name": "agusnieto77/byt5-portada-contrastivo"
+      }
+    },
+    "text2vec": {
+      "class": "SentenceModelAlgorithm",
+      "thresholds": [
+        0.95,
+        0.7
+      ],
+      "params": {
+        "model_name": "shibing624/text2vec-base-multilingual"
+      }
+    },
+    "sentence_transformer_LABSE": {
+      "class": "SentenceTransformerAlgorithm",
+      "thresholds": [
+        0.95,
+        0.7
+      ],
+      "params": {
+        "model": "sentence-transformers/LaBSE"
+      }
+    },
+    "sentence_transformer_mpnet": {
+      "class": "SentenceTransformerAlgorithm",
+      "thresholds": [
+        0.95,
+        0.7
+      ],
+      "params": {
+        "model_name": "paraphrase-multilingual-mpnet-base-v2"
+      }
+    }
+  },
+  "entity_categories": {
+    "port": {
+      "field_l": "citation",
+      "field_r": "voice",
+      "entity_type": "known_entities",
+      "type": "voice-citation",
+      "algorithms": [
+        "levenshtein",
+        "jaro_winkler",
+        "phonetic_dm",
+        "sentence_transformer_LABSE",
+        "byt5"
+      ]
+    },
+    "flag": {
+      "field_l": "citation",
+      "field_r": "voice",
+      "entity_type": "known_entities",
+      "type": "voice-citation",
+      "algorithms": [
+        "root_levenshtein",
+        "phonetic_dm",
+        "byt5"
+      ]
+    },
+    "travel_duration": {
+      "field_l": "citation",
+      "field_r": "voice",
+      "entity_type": "known_entities",
+      "type": "voice-citation",
+      "algorithms": [
+        "levenshtein",
+        "jaro_winkler",
+        "byt5"
+      ]
+    },
+    "ship_tons": {
+      "field_l": "citation",
+      "field_r": "voice",
+      "entity_type": "known_entities",
+      "type": "voice-citation",
+      "algorithms": [
+        "levenshtein",
+        "jaro_winkler",
+        "byt5"
+      ]
+    },
+    "ship_type": {
+      "field_l": "citation",
+      "field_r": "voice",
+      "entity_type": "known_entities",
+      "type": "voice-citation",
+      "algorithms": [
+        "levenshtein",
+        "jaro_winkler",
+        "phonetic_dm",
+        "byt5"
+      ]
+    },
+    "master_role": {
+      "field_l": "citation",
+      "field_r": "voice",
+      "entity_type": "known_entities",
+      "type": "voice-citation",
+      "algorithms": [
+        "levenshtein",
+        "jaro_winkler",
+        "phonetic_dm",
+        "byt5"
+      ]
+    },
+    "commodity": {
+      "field_l": "citation",
+      "field_r": "voice",
+      "entity_type": "known_entities",
+      "type": "voice-citation",
+      "algorithms": [
+        "levenshtein",
+        "jaro_winkler",
+        "ngram_3",
+        "phonetic_dm",
+        "text2vec",
+        "fasttext",
+        "byt5"
+      ]
+    },
+    "unit": {
+      "field_l": "citation",
+      "field_r": "voice",
+      "entity_type": "known_entities",
+      "type": "voice-citation",
+      "algorithms": [
+        "levenshtein",
+        "jaro_winkler",
+        "byt5"
+      ]
+    }
+  }
+}
