@@ -22,7 +22,7 @@
       "pattern": "^boat_fact-\\d{2}.\\d{2}.\\d{2}$",
       "nullable": false,
       "for_cleaning":["not_cleanable"],
-      "fill_with": {"type": "replace", "from": "LIT('boat_fact-00.00.01')"}
+      "fix_extraction_inconsistencies": {"id": "literal_value", "description":"Only one value is available", "type": "replace", "from": "LIT('boat_fact-00.00.01')"}
     },
     "publication_name": {
       "type": "string",
@@ -31,7 +31,9 @@
       "maxLength": 2,
       "nullable": false,
       "for_cleaning":["not_cleanable"],
-      "fill_with": {
+      "fix_extraction_inconsistencies": {
+        "id": "fix_bad_name",
+        "description": "Fix bad publication name (BD -> DB)",
         "type": "replace",
         "from": "LIT('DB')",
         "condition": {
@@ -52,7 +54,9 @@
       "maxLength": 4,
       "nullable": false,
       "for_cleaning":["not_cleanable"],
-      "fill_with": {
+      "fix_extraction_inconsistencies": {
+          "id": "fill_with_year_date",
+          "description": "fill year with year date",
           "type": "replace_if_not_exist",
           "from": {
             "type": "expr",
@@ -91,7 +95,7 @@
       "description": "Es el fragmento texto correspondiente a la entrada extraída publicado en el periodico, fecha y edición indicada.",
       "nullable": false,
       "for_cleaning":["not_cleanable"],
-      "fill_with": {"type": "replace_if_not_exist", "from": "input_text"}
+      "fix_extraction_inconsistencies": {"type": "replace_if_not_exist", "from": "input_text"}
     },
     "travel_departure_date": {
       "type": "string",
@@ -99,6 +103,8 @@
       "format": "date",
       "nullable": true,
       "fill_with": {
+        "id": "to_force_calculation",
+        "description": "force calculation value",
         "type": "replace",
         "from": "LIT('')",
         "condition": "publication_name = 'DB'"
@@ -116,8 +122,10 @@
       "description": "Duración del viaje en días o horas.",
       "nullable": true,
       "for_cleaning":["accepted_idem"],
-      "fill_with": [
+      "fix_extraction_inconsistencies": [
         {
+          "id": "missing_id",
+          "description": "fix with 'id' if is missing",
           "type": "replace",
           "from": "LIT('id.')",
           "condition": {
@@ -128,6 +136,8 @@
           }
         },
         {
+          "id": "delete_bad_init",
+          "description": "delete bad text at the start",
           "type": "replace",
           "from": {"type": "expr", "value": "regexp_extract(parsed_text, '(?i)^.{2,78}[eëéèê]n[.,;\\\\s]\\\\s*((?:[\\\\dóoöi|!l&]+(?: (?:[yýỳv] )?[\\\\d/óoöi|!l&]*)?\\\\s+(?=[dhm]))|(?:[\\\\dóoöi|!l&]+(?: (?:[yýỳv] )?[\\\\d/óoöi|!l&]*)?[\\\\d/óoö|!l&]\\\\s*(?=[dhm])))([dhm]\\\\.?).*$', 1)"},
           "condition": {
@@ -138,6 +148,8 @@
           }
         },
         {
+          "id": "missig_or_bad",
+          "description": "replace bad or missing duration",
           "type": "replace",
           "from": {"type": "expr", "value": "regexp_extract(parsed_text, '(?i)^.{2,78}\\\\s+([\\\\dóoöi|!l&]+)\\\\s*(?:(?:horas?)|(?:d[íi]as?)|(?:meses)|(?:mois)|(?:months?))\\\\W.*', 1)"},
           "condition": {
@@ -155,8 +167,10 @@
       "description": "Unidad de medida de la duración del viaje.",
       "nullable": true,
       "for_cleaning":["accepted_abbreviations", "not_digits", "one_word", "accepted_idem"],
-      "fill_with": [
+      "fix_extraction_inconsistencies": [
         {
+          "id": "missing_id",
+          "description": "fix with 'id' if is missing",
           "type": "replace",
           "from": "LIT('id.')",
           "condition": {
@@ -167,6 +181,8 @@
           }
         },
         {
+          "id": "delete_bad_init",
+          "description": "delete bad text at the start",
           "type": "replace",
           "from": {"type": "expr","value": "regexp_extract(parsed_text, '(?i)^.{2,78}\\\\s+(?:(?:[\\\\dóoöi|!l&]+(?: [\\\\d/óoöi|!l&]*)?)|(?:un)|(?:dos)|(?:tres))\\\\s*((?:horas?)|(?:d[íi]as?)|(?:meses)|(?:mois)|(?:months?))\\\\W.*', 1)"},
           "condition": {
@@ -177,6 +193,8 @@
           }
         },
         {
+          "id": "fix_month_unit",
+          "description": "fix for month unit",
           "type": "replace",
           "from": "LIT('mes')",
           "condition": {
@@ -187,6 +205,8 @@
           }
         },
         {
+          "id": "fix_unit",
+          "description": "fix unit from parsed_text",
           "type": "replace",
           "from": {"type": "expr","value": "regexp_extract(parsed_text, '(?i)^.{2,78}[eëéèê]n[.,;\\\\s]\\\\s*((?:[\\\\dóoöi|!l&]+(?: (?:[yýỳv] )?[\\\\d/óoöi|!l&]*)?\\\\s+(?=[dhm]))|(?:[\\\\dóoöi|!l&]+(?: (?:[yýỳv] )?[\\\\d/óoöi|!l&]*)?[\\\\d/óoö|!l&]\\\\s*(?=[dhm])))([dhm]\\\\W?).*$', 2)"},
           "condition": {
@@ -197,6 +217,8 @@
           }
         },
         {
+          "id": "missing_as_default",
+          "description": "fix missing unit as default value",
           "type": "replace",
           "from": "LIT('d.')",
           "condition": { "and":[
@@ -206,6 +228,8 @@
           ]}
         },
         {
+          "id": "missing_id_as_default",
+          "description": "fix missing unit as id value if travel_duration_value has id",
           "type": "replace_if_not_exist",
           "from": "LIT('id.')",
           "condition": { "and":[
@@ -220,8 +244,10 @@
       "description": "Puerto desde el cual salió el barco.",
       "nullable": true,
       "for_cleaning":["accepted_idem", "not_digits"],
-      "fill_with": [
+      "fix_extraction_inconsistencies": [
          {
+          "id": "missing_id",
+          "description": "fix with 'id' if is missing",
           "type": "replace",
           "from": "LIT('id.')",
           "condition": {
@@ -233,6 +259,8 @@
           }
         },
         {
+          "id": "fix_value_ademas",
+          "description": "fix bad value with 'ademàs...' text",
           "type": "replace",
           "from": "LIT('')",
           "condition": {
@@ -243,26 +271,46 @@
           }
         },
         {
+          "id": "delete_end",
+          "description": "delete extra end text",
           "type": "replace",
-          "from": {"type": "expr", "value": "regexp_extract(travel_departure_port, '(?i)^\\\\W?(?!(?:id([.,;])\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]+(\\\\w?.*)$', 1)"},
-          "condition": "travel_departure_port rlike '(?i)^\\\\W?(?!(?:id([.,;])\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]+(\\\\w?.*)$'"
-        },
-        {
-          "type": "replace",
-          "from": {"type": "expr", "value": "regexp_extract(travel_departure_port, '(?i)^\\\\W?(?!(?:id([.,;])\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]*\\\\s*(?:[db]el?(?:(?: +)|$))(\\\\w?.*)$', 1)"},
+          "from": {"type": "expr", "value": "regexp_extract(travel_departure_port, '(?i)^\\\\W*(.*) en\\\\W*$', 1)"},
           "condition": {
             "and": [
-              "travel_departure_port rlike '(?i)^\\\\W?(?!(?:id([.,;])\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]*\\\\s*(?:[db]el?(?:(?: +)|$))(\\\\w?.*)$'",
-              "parsed_text rlike '(?i)^\\\\W?(?!(?:id([.,;])\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]*\\\\s*(?:[db]el?(?:(?: +)|$))(\\\\w?.*)$'"
+              "publication_name = 'DB'",
+              "travel_departure_port rlike '(?i)^\\W*(.*) en\\W*$'"
             ]
           }
         },
         {
+          "id": "delete_init_1",
+          "description": "delete extra init text",
+          "type": "replace",
+          "from": {"type": "expr", "value": "regexp_extract(travel_departure_port, '(?i)^\\\\W?(?!(?:id(?:[.,;])?\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]+(\\\\w?.*)$', 1)"},
+          "condition": "travel_departure_port rlike '(?i)^\\\\W?(?!(?:id(?:[.,;])?\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]+(\\\\w?.*)$'"
+        },
+        {
+          "id": "delete_init_2",
+          "description": "delete extra init text",
+          "type": "replace",
+          "from": {"type": "expr", "value": "regexp_extract(travel_departure_port, '(?i)^\\\\W?(?!(?:id(?:[.,;])?\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]*\\\\s*(?:[db]el?(?:(?: +)|$))(\\\\w?.*)$', 1)"},
+          "condition": {
+            "and": [
+              "travel_departure_port rlike '(?i)^\\\\W?(?!(?:id(?:[.,;])?\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]*\\\\s*(?:[db]el?(?:(?: +)|$))(\\\\w?.*)$'",
+              "parsed_text rlike '(?i)^\\\\W?(?!(?:id(?:[.,;])?\\\\b)|(?:idem\\\\b))[\\\\W\\\\d/óoöi|!l&]*\\\\s*(?:[db]el?(?:(?: +)|$))(\\\\w?.*)$'"
+            ]
+          }
+        },
+        {
+          "id": "delete_boat_type",
+          "description": "delete boat type as port",
           "type": "replace",
           "from": "LIT('')",
           "condition":"travel_departure_port rlike '(?i)^\\\\W*(?:(?:bote)|(?:bergant[ií]n)|(?:buque)|(?:balandra)|(?:corbeta)|(?:crucero)|(?:fragata)|(?:goleta)|(?:lugre)|(?:guairo)|(?:m[íi]stico)|(?:jabeque)|(?:pailebot)|(?:la[úu]d)|(?:paquete)|(?:polacra)|(?:queche)|(?:tartana)|(?:transporte)|(?:vapor))(?:(?:\\\\W+)|$).*$'"
         },
         {
+          "id": "fix_missing_value_1",
+          "description": "Fix missing value from parsed_text",
           "type": "replace",
           "from": {
             "type": "expr",
@@ -271,26 +319,41 @@
           "condition": {
             "and": [
               "publication_name = 'DB'",
-              "(travel_departure_port is null or trim(cast(travel_departure_port as string)) = '')",
+              "(travel_departure_port is null or trim(cast(travel_departure_port as string)) = '' or startswith(regexp_extract(parsed_text, '(?i)^\\\\W*de (?!arribad)((?!.{2,75} (?:(?:en)|(?:de)|(?:con)) .{2,75}[,.]? en).{2,75}?)[,.]? en (?:(?:[\\\\dóoöi|!l&])|(?:id)).*$', 1), travel_departure_port))",
               "parsed_text rlike '(?i)^\\\\W*de (?!arribad)((?!.{2,75} (?:(?:en)|(?:de)|(?:con)) .{2,75}[,.]? en).{2,75}?)[,.]? en (?:(?:[\\\\dóoöi|!l&])|(?:id)).*$'"
             ]
           }
         },
         {
+          "id": "fix_missing_value_2",
+          "description": "Fix missing value from parsed_text",
           "type": "replace",
           "from": {
             "type": "expr",
-            "value": "regexp_extract(parsed_text, '(?i)^\\W*de (?!arribad)((?!.{2,30} (?:(?:en)|(?:de)|(?:con)) .{2,30}[,.]? en).{2,30}?)[,.]? (?:(?:[\\\\dóoöi|!l&])|(?:id)).*$', 1)"
+            "value": "regexp_extract(parsed_text, '(?i)^\\\\W*de (?!arribad)((?!.{2,30} (?:(?:en)|(?:de)|(?:con)) .{2,30}[,.]? en).{2,30}?)[,.]? (?:(?:[\\\\dóoöi|!l&])|(?:id)).*$', 1)"
           },
           "condition":{
             "and":[
               "publication_name = 'DB'",
-              "(travel_departure_port is null or trim(cast(travel_departure_port as string)) = '')",
-              "parsed_text rlike '(?i)^\\W*de (?!arribad)((?!.{2,30} (?:(?:en)|(?:de)|(?:con)) .{2,30}[,.]? en).{2,30}?)[,.]? (?:(?:[\\\\dóoöi|!l&])|(?:id)).*$'"
+              "(travel_departure_port is null or trim(cast(travel_departure_port as string)) = '' or startswith(regexp_extract(parsed_text, '(?i)^\\\\W*de (?!arribad)((?!.{2,30} (?:(?:en)|(?:de)|(?:con)) .{2,30}[,.]? en).{2,30}?)[,.]? (?:(?:[\\\\dóoöi|!l&])|(?:id)).*$', 1), travel_departure_port))",
+              "parsed_text rlike '(?i)^\\\\W*de (?!arribad)((?!.{2,30} (?:(?:en)|(?:de)|(?:con)) .{2,30}[,.]? en).{2,30}?)[,.]? (?:(?:[\\\\dóoöi|!l&])|(?:id)).*$'"
             ]
           }
         },
         {
+          "id": "delete_port_of_call_1",
+          "description": "Delete all port of call from departure port",
+          "type": "replace",
+          "lazy": true,
+          "from": {
+            "type": "expr",
+            "value": "regexp_extract(travel_departure_port, '(?i)^(?:(?!escala)(.*?)\\\\W)?(?:(?:[yv] ?)| en | a )?(escalas?)?(?: en)?$', 1)"
+          },
+          "condition": "travel_departure_port rlike '(?i)^(?:(?!escala)(.*?)\\\\W)?(?:(?:[yv] ?)| en | a )?(escalas?)?(?: en)?$'"
+        },
+        {
+          "id": "delete_port_of_call_2",
+          "description": "Delete all port of call from departure port",
           "type": "replace",
           "lazy": true,
           "from": {
@@ -409,8 +472,10 @@
             }
         }
       },
-      "fill_with": [
+      "fix_extraction_inconsistencies": [
         {
+          "id": "fix_from_departure_port_1",
+          "description": "Fill all port of call from departure port",
           "type": "add_array_from_list",
           "from": {
             "type": "expr",
@@ -423,6 +488,33 @@
               "(travel_port_of_call_list is null or size(travel_port_of_call_list) = 0)"
             ]
           }
+        },
+        {
+          "id": "fix_from_departure_port_1",
+          "description": "Fill all port of call from departure port",
+          "type": "add_array_item",
+          "from": ["LIT('escalas')", null, null],
+          "to": [
+            "port_of_call_place",
+            "port_of_call_arrival_date",
+            "port_of_call_departure_date"
+          ],
+          "condition": {
+            "and": [
+              "travel_departure_port rlike '(?i)^(?:(?!escala)(.*?)\\\\W)?(?:(?:[yv] ?)| en | a )?(escalas?)?(?: en)?$'",
+              "(travel_port_of_call_list is null or not exists(travel_port_of_call_list, x -> lower(trim(cast(x.port_of_call_place as string))) rlike '(?i)^escalas?$'))"
+            ]
+          }
+        },
+        {
+          "id": "delete_duplicates",
+          "description": "Delete duplicates in port of calls",
+          "type": "replace",
+          "from": {
+            "type": "expr",
+            "value": "filter(travel_port_of_call_list, x -> not (lower(trim(cast(x.port_of_call_place as string))) = 'en' and x.port_of_call_arrival_date is null and x.port_of_call_departure_date is null))"
+          },
+          "condition": "travel_port_of_call_list is not null and exists(travel_port_of_call_list, x -> lower(trim(cast(x.port_of_call_place as string))) = 'en' and x.port_of_call_arrival_date is null and x.port_of_call_departure_date is null)"
         }
       ]
     },
@@ -436,7 +528,95 @@
       "type": "string",
       "description": "Tipo de embarcación.",
       "nullable": true,
-      "for_cleaning":["accepted_abbreviations", "not_digits", "not_parenthesis"]
+      "for_cleaning":["accepted_abbreviations", "not_digits", "not_parenthesis"],
+      "fix_extraction_inconsistencies": [
+        {
+          "id": "delete_bad_value_1",
+          "description": "elimina el contenido con una única letra que no sea inicial de un tipo de barco",
+          "type": "replace",
+          "from": "LIT('')",
+          "condition": {
+              "and":[
+                "publication_name = 'DB'",
+                "ship_type rlike '(?iuU)^\\\\W*(?:[yýỳeéè][ ,.;]|[^bcfglmjpqtv]) *$'"
+              ]
+          }
+        },
+        {
+          "id": "delete_bad_value_2",
+          "description": "elimina el contenido con valores erroneos",
+          "type": "replace",
+          "from": "LIT('')",
+          "condition": {
+              "and":[
+                "publication_name = 'DB'",
+                "ship_type rlike '(?iuU)^\\\\W*(?:antes|d[iíìï]as?)\\\\W*$'"
+              ]
+          }
+        },
+        {
+          "id": "delete_bad_init_1",
+          "description": "elimina el contenido inicial incorrecto",
+          "type": "replace",
+          "from": {"type": "expr", "value": "regexp_extract(ship_type, '(?iuU)^\\\\W*(?:(?:\\\\w\\\\W+(?:\\\\w\\\\W+)?(?=bote|bergant[ií]n|buque|balandra|corbeta|crucero|fragata|goleta|lugre|guairo|m[íi]stico|jabeque|pailebot|la[úu]d|paquete|polacra|queche|tartana|transporte|vapor))|[dyýỳÿeéèë]\\\\W+|(?:[íìi]d(?:em|[.,]{0,3})?\\\\W(?=bote|bergant[ií]n|buque|balandra|corbeta|crucero|fragata|goleta|lugre|guairo|m[íi]stico|jabeque|pailebot|la[úu]d|paquete|polacra|queche|tartana|transporte|vapor))|(?:id\\\\W+(?:en\\\\W+(?:(?:id)|(?:\\\\d{1,5}\\\\W+(?:[dhm][.,]{0,3}|d[iíì]as?|horas?|mes(?:es)?)))\\\\W+))?)(\\\\w{4,}.*)$', 1)"},
+          "condition": {
+              "and":[
+                "publication_name = 'DB'",
+                "ship_type rlike '(?iuU)^\\\\W*(?:(?:\\\\w\\\\W+(?:\\\\w\\\\W+)?(?=bote|bergant[ií]n|buque|balandra|corbeta|crucero|fragata|goleta|lugre|guairo|m[íi]stico|jabeque|pailebot|la[úu]d|paquete|polacra|queche|tartana|transporte|vapor))|[dyýỳÿeéèë]\\\\W+|(?:[íìi]d(?:em|[.,]{0,3})?\\\\W(?=bote|bergant[ií]n|buque|balandra|corbeta|crucero|fragata|goleta|lugre|guairo|m[íi]stico|jabeque|pailebot|la[úu]d|paquete|polacra|queche|tartana|transporte|vapor))|(?:id\\\\W+(?:en\\\\W+(?:(?:id)|(?:\\\\d{1,5}\\\\W+(?:[dhm][.,]{0,3}|d[iíì]as?|horas?|mes(?:es)?)))\\\\W+))?)(\\\\w{4,}.*)$'"
+              ]
+          }
+        },
+        {
+          "id": "delete_bad_init_2",
+          "description": "elimina el contenido inicial incorrecto",
+          "type": "replace",
+          "from": {"type": "expr", "value": "regexp_extract(ship_type, '(?iuU)^ *(?:d[íìïi]as?\\\\.?,? |[ndb]s?\\\\.?[, ]|en |conducido por el |y escalas |del [uúù]ltimo punto |entro el ) *(.+)$', 1)"},
+          "condition": {
+              "and":[
+                "publication_name = 'DB'",
+                "ship_type rlike '(?iuU)^ *(?:mes(?:es)?[.,]{0,2} |d[íìïi]as?[.,]{0,2} |[ndb]s?[.,]{0,2} |en |conducido por el |(?:y )?escalas |del [uúù]ltimo punto |entro el |(?:de)? la mar (?:el|un|l|una)? ) *(.+)$'"
+              ]
+          }
+        },
+        {
+          "id": "ship_type_from_parsed_text",
+          "description": "Si no tiene valor extrau una palabra clave del parsed_text, pues los tipos de barco no se repiten en la notícia ",
+          "type": "replace",
+          "from": {
+            "type": "expr",
+            "value": "regexp_extract(parsed_text, '(?i)^.*?\\\\b((?:bote|bergant[ií]n|buque|balandra|corbeta|crucero|fragata|goleta|lugre|guairo|m[íi]stico|jabeque|pailebot|la[úu]d|paquete|polacra|queche|tartana|transporte|vapor)(?:[- ](?:bote|bergant[ií]n|buque|balandra|corbeta|crucero|fragata|goleta|lugre|guairo|m[íi]stico|jabeque|pailebot|la[úu]d|paquete|polacra|queche|tartana|transporte|vapor))?)\\\\b.*$', 1)"
+          },
+          "condition": {
+              "and":[
+                "publication_name = 'DB'",
+                "(ship_type is null or trim(cast(ship_type as string)) = '')",
+                "parsed_text rlike '(?i)^.*?\\\\b((?:bote|bergant[ií]n|buque|balandra|corbeta|crucero|fragata|goleta|lugre|guairo|m[íi]stico|jabeque|pailebot|la[úu]d|paquete|polacra|queche|tartana|transporte|vapor)(?:[- ](?:bote|bergant[ií]n|buque|balandra|corbeta|crucero|fragata|goleta|lugre|guairo|m[íi]stico|jabeque|pailebot|la[úu]d|paquete|polacra|queche|tartana|transporte|vapor))?)\\\\b.*$'"
+              ]
+          }
+        },
+        {
+          "id": "delete_flag_part",
+          "description": "Elimina la bandera del contenido si el campo ship_flag contiene extrangeras",
+          "type": "replace",
+          "lazy": true,
+          "from": {
+            "type": "expr",
+            "value": "regexp_extract(ship_type, '(?iuU)^\\\\W*(.*(?!-))\\\\W(\\\\w+)$', 1)"
+          },
+          "condition": {
+            "and": [
+              "publication_name = 'DB'",
+              "ship_type rlike '(?iuU)^\\\\W*(.*(?!-))\\\\W(\\\\w+)$'",
+              {
+                "or": [
+                  "ship_flag rlike '(?iuU)^.*?\\\\W*e[xs]tran[gj].*\\\\W*?$'",
+                  "trim(cast(ship_flag as string)) = regexp_extract(ship_type, '(?iuU)^\\\\W*(.*(?!-))\\\\W(\\\\w+)$', 2)"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     "ship_name": {
       "type": "string",
@@ -460,7 +640,25 @@
       "type": "string",
       "description": "País o nacionalidad bajo cuya bandera navega el barco. Ejemplos: 'español', 'americano', 'oriental'",
       "nullable": true,
-      "for_cleaning":["accepted_idem",  "not_digits", "not_parenthesis"]
+      "for_cleaning":["accepted_idem",  "not_digits", "not_parenthesis"],
+      "fix_extraction_inconsistencies": [
+        {
+          "id": "extract_flag_from_ship_type",
+          "description": "Extrae la bandera del contenido si el campo ship_type si ship_falg contiene extrangeras",
+          "type": "replace",
+          "from": {
+            "type": "expr",
+            "value": "regexp_extract(ship_type, '(?iuU)^\\\\W*(.*(?!-))\\\\W(\\\\w+)$', 2)"
+          },
+          "condition": {
+            "and": [
+              "publication_name = 'DB'",
+              "ship_type rlike '(?iuU)^\\\\W*(.*(?!-))\\\\W(\\\\w+)$'",
+              "ship_flag rlike '(?iuU)^.*?\\\\W*e[xs]tran[gj].*\\\\W*?$'"
+            ]
+          }
+        }
+      ]
     },
     "master_role": {
       "type": "string",
@@ -538,7 +736,7 @@
         "required": ["cargo_merchant_name", "cargo"],
         "additionalProperties": false
       },
-      "fill_with": [
+      "fix_extraction_inconsistencies": [
           {
             "type": "add_array_item",
             "from": [
@@ -615,6 +813,7 @@
   },
   "delete_if": [
     "parsed_text rlike '(?i)^(?:(?:(?:\\\\W|[^d])[^ed][^el]?)|(?:di[ap]:? )|(?:id.?))?.{0,2}para.*$'",
-    "parsed_text rlike '(?i).*(?:(?:acorazado)|(?:torpedero)).*'"
+    "parsed_text rlike '(?i).*(?:(?:acorazado)|(?:torpedero)).*'",
+    "(publication_name = 'DB' and parsed_text rlike '(?iuU)^\\\\W*adem[aáàä]s\\\\W\\\\d+.*$')"
   ]
 }
