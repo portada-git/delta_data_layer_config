@@ -189,8 +189,134 @@ A nivel raíz del schema se permite definir también el atributo _delete_if_ en 
 ```
 Cada uno de los procesos de limpieza extraerá la información pertinente de la configuración y actuará en consecuencia. Existen 9 procesos de limpieza que deben ejecutarse preferiblemente en el orden indicado. 
 
-1) **Completar la estructura acordada**. Llamando al método _complete_accepted_structure_ y pasándole el dataframe a limpiar, forzará la existencia de los campos y forzará que la estructura del dataframe pasado por parametro, coincida exactamente con el schema sin tener en cuenta los tipos de datos, solo se fuerzan los nombres y las estructuras compuestas. Este método no elimina los campos que no figuren en la estructura del schema, ni modifica el contenido de los mismos. Esto permite, si se desea, guardar una copia de los datos originales usando el método _save_original_values_of_ship_entries_ evitando problemas de lectura incoherente cuando la extracción haya producido campos con distintos schemas.  
- 3) **Completar el contenido de los campos de acuerdo a lo indicado en el schema**. El fichero con el schema debe cumplir las especificaciones de un schema JSON con ciertas limitaciones y con información ampliada. No se admiten estructuras flexibles con especificaciones tipo "allOf", "anyOf" ni "if-then". La estructura final solo debe tener una única forma. Sin embargo, los campos de la estructura podrán ser enriquecidos con información extra que será útil para las distintas utilidades de la limpieza. En el método _fill_with_schema_ se usará el atributo _fill_with_ para llenar los campos sin contenido o con contenido incorrecto reconocido. Cada campo de la estructura que sea un campo raíz del schema admite la información formal que permite ejecutar processos de _Spark_ para completar o corregir el contenido de los campos donde esté definido, usando un valor literal, una columna o un cálculo.  EL contenido de _fill_with_ puede ser un objeto o un array de objetos. La forma de array permite definir para un mismo campo múltiples sentencias de relleno/corrección. Los objetos deben disponer de un atributo _type_ el cual puede contener uno de estos valores:   "_replace_", "_replace_if_not_exist_", "_add_array_item_",  "_add_array_from_array_" o "_add_array_from_list_" . También debe tener el atributo _from_ para indicar el origen de los datos a rellenar y opcionalmente el atributo _to_ para indicar donde aplicar el relleno/corrección de los datos cuando se trate de un campo estructurado y la corrección ataña solamente a una parte de la estructura. Opcionalmente se usará el atributo _condition_ para establecer  la condición bajo la cual se realizará el remplazo o la corrección. Veamos algunos ejemplos.
+1) **Completar la estructura acordada**. Llamando al método _complete_accepted_structure_ y pasándole el dataframe a limpiar, forzará la existencia de los campos y forzará que la estructura del dataframe pasado por parametro, coincida exactamente con el schema sin tener en cuenta los tipos de datos, solo se fuerzan los nombres y las estructuras compuestas. En caso de prever una structura diferente a la esperada, se usará el atributo "_normalize_" para resolver el problema y adaptar la estructura de la extracción a la deseada.  Este método no elimina los campos que no figuren en la estructura del schema, ni modifica el contenido de los mismos. Esto permite, si se desea, guardar una copia de los datos originales usando el método _save_original_values_of_ship_entries_ evitando problemas de lectura incoherente cuando la extracción haya producido campos con distintos schemas.  
+Por ejemplo sabemos que _travel_port_of_call_list_, se ha extraído con diferentes formatos: solo lista de puertos (array de textos) o lista con nombres de puerto y fechas de llegada y salida de cada puerto (array de objetos con dos o tres campos). Para resolver las diferentes alternativas, _normalize_ permite indicar diversas alternativas para conseguir adaptar los resultados de la extracción a la estructura deseada. la configuración de _normalize_ admite:
+```
+"normalize": {
+  "type": "foreach_item",   // o "single" (defecto). "foreach_item" se usa si el campo és un array de estructuras. Se uarà "single" si se trata de un valor estructurado.
+  "options": [ ... ],       // lista de intentos de adaptaciones. Se queda con la primera adaptación que funcione.
+  "otherwise": { ... }      // adaptación si todos los intentos anteriores fallan
+}
+``` 
+En cada una de las opciones se permite definir un _try_cast_to_ con una de las estructuras esperadas y un _equivalence_ que indicará la correspondencia entre estructuras (adaptación de la antigua a la nueva). Veamos un ejemplo:
+
+>Como ya hemos indicado, travel_port_of_call_list, puede llegar con multiples estructuras. Para cada una de ellas indicaremos su adaptación y en caso de fallar todas, definiremos como rellenar la estructura por defecto. 
+
+```
+    ...
+    "travel_port_of_call_list": {
+        "type": "array",
+        "description": "Lista de puertos donde el barco hizo escala.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "port_of_call_place": {
+                    "type": "string",
+                    "description": "Puerto donde hizo la escala.",
+                    "nullable": false,
+                    "for_cleaning": ["accepted_idem", "not_digits"]
+                },
+                "port_of_call_arrival_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Fecha de llegada al puerto de escala.",
+                    "nullable": true
+                },
+                "port_of_call_departure_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Fecha de llegada al puerto de escala.",
+                    "nullable": true
+                }
+            },
+            "required": ["port_of_call_place"],
+            "additionalProperties": false
+        },
+        "normalize": {
+            "type": "foreach_item",
+            "options": [
+                {
+                    "try_cast_to": {
+                        "type": "object",
+                        "properties":{
+                            "port_of_call_place": {
+                                "type": "string"
+                            },
+                            "port_of_call_arrival_date": {
+                                "type": "string"
+                            },
+                            "port_of_call_departure_date": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "equivalence": {
+                        "type": "struct",
+                        "new_value": {
+                            "port_of_call_place": {
+                                "type": "column",
+                                "value": "old_value.port_of_call_place"
+                             },
+                             "port_of_call_arrival_date": {
+                                 "type": "column",
+                                 "value": "old_value.port_of_call_arrival_date"
+                             },
+                             "port_of_call_departure_date": {
+                                 "type": "column",
+                                 "value": "old_value.port_of_call_departure_date"
+                             }
+                        }
+                    }
+                },{
+                    "try_cast_to": {
+                        "type": "string"
+                     },
+                     "equivalence": {
+                         "type": "struct",
+                         "new_value": {
+                             "port_of_call_place": {
+                                  "type": "column",
+                                  "value": "old_value"
+                             },
+                             "port_of_call_arrival_date": {
+                                  "type": "literal",
+                                  "value": null
+                              },
+                              "port_of_call_departure_date": {
+                                  "type": "literal",
+                                  "value": null
+                              }
+                         }
+                     }
+                }
+           ],
+           "otherwise":{
+               "equivalence": {
+                   "type": "struct",
+                   "new_value": {
+                       "port_of_call_place": {
+                            "type": "literal",
+                            "value": null
+                        },
+                        "port_of_call_arrival_date": {
+                            "type": "literal",
+                            "value": null
+                        },
+                        "port_of_call_departure_date": {
+                             "type": "literal",
+                             "value": null
+                        }
+                  }
+             }
+         }
+     },
+     ...
+```
+
+>Cabe observar que si la estructura esperada coincide con la estructura final, debe configurarse también como opción de adaptación para poder definir una alternativa de formato desconocido y evitar cualquier fallo. Con esa configuració lo que se pretende es:
+>Si la estuctura coincide, cada campo se copia al correspondiente. Si lo que llega és un array de strings, el valor obtenido se copia a _port_of_call_place_ i el resto se deja a null. En caso de no coincidir ninguna de las anteriores, para evitar un error fatal se define que deberan llenarse todos los datos de la estructura a null.
+
+ 2) **Completar el contenido de los campos de acuerdo a lo indicado en el schema**. El fichero con el schema debe cumplir las especificaciones de un schema JSON con ciertas limitaciones y con información ampliada. No se admiten estructuras flexibles con especificaciones tipo "allOf", "anyOf" ni "if-then". La estructura final solo debe tener una única forma. Sin embargo, los campos de la estructura podrán ser enriquecidos con información extra que será útil para las distintas utilidades de la limpieza. En el método _fill_with_schema_ se usará el atributo _fill_with_ para llenar los campos sin contenido o con contenido incorrecto reconocido. Cada campo de la estructura que sea un campo raíz del schema admite la información formal que permite ejecutar processos de _Spark_ para completar o corregir el contenido de los campos donde esté definido, usando un valor literal, una columna o un cálculo.  EL contenido de _fill_with_ puede ser un objeto o un array de objetos. La forma de array permite definir para un mismo campo múltiples sentencias de relleno/corrección. Los objetos deben disponer de un atributo _type_ el cual puede contener uno de estos valores:   "_replace_", "_replace_if_not_exist_", "_add_array_item_",  "_add_array_from_array_" o "_add_array_from_list_" . También debe tener el atributo _from_ para indicar el origen de los datos a rellenar y opcionalmente el atributo _to_ para indicar donde aplicar el relleno/corrección de los datos cuando se trate de un campo estructurado y la corrección ataña solamente a una parte de la estructura. Opcionalmente se usará el atributo _condition_ para establecer  la condición bajo la cual se realizará el remplazo o la corrección. Veamos algunos ejemplos.
 _**Uso de _replace_** o **_replace_if_not_exist_**_.  Pueden usarse indistintamente para reemplazar el contenido de un campo por un valor literal, por el valor de otra columna o por un cálculo o expresión soportada por _Spark_. Como su nombre indica, _replace_if_not_exist_ realizará el cambio solamente en aquellas fila cuyo valor del campo al que pertenece el atributo _fill_with_ sea _null_, mientras que _replace_ cambiará el valor en todos los casos si carece de condición o en los casos que cumplan la condición si la hubiese . Ejemplo: 
 
  > _Si durante el proceso de extracción se cambia el nombre de una campo por error, puede arreglarse mediante esta utilidad.  De echo, algunas de las extracciones indicaron la unidad de la capacidad el barco con el nombre del campo "ship_tons_units", pero en el resto fue etiquetado con el nombre correcto de   "ship_tons_unit". Las filas correctas contendrán el valor en dicho campo, mientras que las incorrectas, gracias a la utilidad anterior (complete_accepted_structure), contendrán un valor nulo. Usaremos esta propiedad para indicar que se reemplace por el correspondiente valor da la columna "ship_tons_units"._
