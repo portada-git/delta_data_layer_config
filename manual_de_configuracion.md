@@ -187,7 +187,119 @@ A nivel raíz del schema se permite definir también el atributo _delete_if_ en 
    "delete_if": "parsed_text rlike '(?i).*(?:(?:acorazado)|(?:torpedero)).*'"  
 }
 ```
-Cada uno de los procesos de limpieza extraerá la información pertinente de la configuración y actuará en consecuencia. Existen 9 procesos de limpieza que deben ejecutarse preferiblemente en el orden indicado. 
+
+Cada uno de los procesos de limpieza extraerá la información pertinente de la configuración y actuará en consecuencia. Todos los procesos de limpieza generan metadatos con valores históricos para soportar la trazabilidad de los cambios generados en esta fase.
+
+### Metadatos de los procesos de limpieza y trazabilidad.
+La biblioteca _data_layer_ del proyecto portada, ha buscado un equilibrio para que la  meta-información almacenada tenga suficiente valor informativo respecto a la trazabilidad de los cambios realizados durante la fase de limpieza sin que ello cause un gran deterioro en la eficiencia temporal de los procesos. Para ello se distinguen 3 niveles de metadatos: _registro de operaciones genéricas en el dataframe_, _històrico de valores y operaciones de limpieza para soportar la trazabilidad_ y  _històrico de valores sin soporte a la trazabilidad_.
+
+El primer nivel es un registro detallado de todas las operaciones sufridas en los dataframes durante el proceso de limpieza. Sirve de registro histórico de los cambios realizados a nivel de dataframe (copias de columnas, funciones de spark usada para los cambios de valor de las columnas, eliminación de columnas, etc.). Es útil como registro de operaciones detalladas, columnas implicadas, etc., pero resulta poco practico para el seguimiento de la trazabilidad en limpiezas exhaustivas con un gran número de cambios. Por defecto se encuentra desactivado.
+```
+Ejemplo de registro
+--------------------
+log_id:3471fe4a-24b2-1114-ac41-128a5dfa159
+timestamp:2026-11-03T23:20:13.212459+00:00
+storage id: 34b0f70a-61e1-4013-a4e7-12cf38afc007
+transformer_name: save_original_values_of_entries
+dataframe_name: DF(ingest/ship_entries/*/*/*/*/*/*.json).toDF(["'ai_observations'", "'ai_observations_detailed_value'", "'ai_observations_extraction_source_method'", "'cargo_list'", "'cargo_list_detailed_value'", ..."]).withColumn(["'obs'", 'obs_BAD_CHAR']).drop(["'obs_BAD_CHAR'"])...)
+action: withColumn("'publication_date'", "Column<'CASE WHEN (publication_date IS NULL) THEN publication_date WHEN (publication_date = null) THEN publication_date ELSE translate(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(publication_date, ^\\s*un.?\\s*$, 1, 1), ^\\s*dos\\s*$, 2, 1), ^\\s*tres\\s*$, 3, 1), ^\\s*cuatro\\s*$, 4, 1), ^\\s*cinco\\s*$, 5, 1), ^\\s*seis\\s*$, 6, 1), ^\\s*siete\\s*$, 7, 1), ^\\s*ocho\\s*$, 8, 1), ^\\s*nueve\\s*$, 9, 1), ^\\s*(\\d+) *y? medi[oa], $1.5, 1), ^\\s*(\\d+) *y? cuarto, $1.25, 1), ^\\s*(\\d+) *(?:y )?1 ?/ ?4, $1.25, 1), ^\\s*(\\d+) *(?:y )?1 ?/ ?2, $1.5, 1), ^\\s*(\\d+) *(?:y )?3 ?/ ?4, $1.75, 1), ^\\s*(\\d+) *(?:y )?1 ?/ ?3, $1.34, 1), ^nu[l1][l1]$, , 1), OoQCIil|!tZzASóG&Bög, 00001111112245666889) END'>")
+involved_columns: publication_date
+```
+
+El segundo nivel permite conocer la razón de los cambios, lo que podríamos llamar un "nivel semántico". Requiere una intervención humana en la configuración, pero de ese modo, se consigue almacenar toda la información necesaria para descubrir, en cada caso, que operaciones se han aplicado, cual ha sido la razón de aplicarlas y en qué orden se han ejecutado, a fin de mantener la trazabilidad de los cambios. La operaciones realizadas se classifican en procesos y estos en etapas según se muestra la tabla siguiente:
+
+<table>
+ <tr>
+    <th>Etapas</th>
+    <th>Procesos</th>
+    <th>Operaciones</th>
+  </tr>
+   <tr>
+    <td rowspan='6'>fixed_extraction</th>
+    <td rowspan='3'>extraction</th>
+    <td>default_value</th>
+  </tr>
+   <tr>
+    <td>original_value</th>
+  </tr>
+   <tr>
+    <td>calculated_value</th>
+  </tr>
+   <tr>
+    <td rowspan='2'>boat_fact_model</th>
+    <td>create unique ID</th>
+  </tr>
+   <tr>
+    <td>datetime to string date</th>
+  </tr>
+   <tr>
+    <td>fix_extraction_inconsistencies</th>
+    <td>ID de la especificación del schema o '0000', '0001', ...</th>
+  </tr>
+<tr>
+    <td rowspan='11'>fixed</th>
+    <td>fill_gaps</th>
+    <td>D de la especificación del schema o '0000', '0001', ...</th>
+  </tr>
+<tr>
+    <td rowspan='8'>fixing</th>
+    <td>resolve_idems</th>
+  </tr>
+<tr>
+    <td>trim_punctuation</th>
+  </tr>
+<tr>
+    <td>numeric_map</th>
+  </tr>
+<tr>
+    <td>not_paragraph_map</th>
+  </tr>
+<tr>
+    <td>one_word_map</th>
+  </tr>
+<tr>
+    <td>only_text_map</th>
+  </tr>
+<tr>
+    <td>not_parenthesis_map</th>
+  </tr>
+<tr>
+    <td>[FIELD_NAME]_map</th>
+  </tr>
+<tr>
+    <td rowspan='2'>calculation</th>
+    <td>decrement_data</th>
+  </tr>
+<tr>
+    <td>data_difference</th>
+  </tr>
+<tr>
+    <td rowspan='4'>cleaned</th>
+    <td rowspan='4'>cleaned</th>
+    <td>cast_to_integer</th>
+  </tr>
+<tr>
+    <td>cast_to_number</th>
+  </tr>
+<tr>
+    <td>cast_to_boolean</th>
+  </tr>
+<tr>
+    <td>...</th>
+  </tr>
+<tr>
+    <td>normalized</th>
+    <td>normalized</th>
+    <td>normalize_string</th>
+  </tr>
+</table>
+
+[TO DO]
+
+
+### Descripción de los procesos de limpieza
+
+Existen 9 procesos de limpieza que deben ejecutarse preferiblemente en el orden indicado. 
 
 1) **Completar la estructura acordada**. Llamando al método _complete_accepted_structure_ y pasándole el dataframe a limpiar, forzará la existencia de los campos y forzará que la estructura del dataframe pasado por parametro, coincida exactamente con el schema sin tener en cuenta los tipos de datos, solo se fuerzan los nombres y las estructuras compuestas. En caso de prever una structura diferente a la esperada, se usará el atributo "_normalize_" para resolver el problema y adaptar la estructura de la extracción a la deseada.  Este método no elimina los campos que no figuren en la estructura del schema, ni modifica el contenido de los mismos. Esto permite, si se desea, guardar una copia de los datos originales usando el método _save_original_values_of_ship_entries_ evitando problemas de lectura incoherente cuando la extracción haya producido campos con distintos schemas.  
 Por ejemplo sabemos que _travel_port_of_call_list_, se ha extraído con diferentes formatos: solo lista de puertos (array de textos) o lista con nombres de puerto y fechas de llegada y salida de cada puerto (array de objetos con dos o tres campos). Para resolver las diferentes alternativas, _normalize_ permite indicar diversas alternativas para conseguir adaptar los resultados de la extracción a la estructura deseada. la configuración de _normalize_ admite:
