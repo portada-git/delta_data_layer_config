@@ -213,65 +213,83 @@ El segundo nivel permite conocer la razón de los cambios, lo que podríamos lla
     <th>Etapas</th>
     <th>Procesos</th>
     <th>Operaciones</th>
+    <th>Descripción</th>
   </tr>
    <tr>
-    <td rowspan='6'>fixed_extraction</th>
-    <td rowspan='3'>extraction</th>
-    <td>default_value</th>
+    <td rowspan='6'>fixed_extraction</td>
+    <td rowspan='3'>extraction</td>
+    <td>default_value</td>
+    <td>Durante el proceso de extracción se obtuvo como valor por defecto. Por tanto és posible que el valor no figure en el cuerpo de la notícia.</td>
   </tr>
    <tr>
-    <td>original_value</th>
+    <td>original_value</td>
+    <td>El valor se obtuvo directamente de la extracción.</td>
   </tr>
    <tr>
-    <td>calculated_value</th>
+    <td>calculated_value</td>
+    <td>El valor se obtuvo mediante algun método de calculo, por lo que és posible que este valor no figure en el cuerpo de la notícia.</td>
   </tr>
    <tr>
-    <td rowspan='2'>boat_fact_model</th>
-    <td>create unique ID</th>
+    <td rowspan='2'>boat_fact_model</td>
+    <td>create unique ID</td>
+    <td>El valor se generó durante la lectura de los datos de la ingestión, para assegurar que cada registro dispondrà inequívocamente de un identificador único.</td>
   </tr>
    <tr>
-    <td>datetime to string date</th>
+    <td>datetime to string date</td>
+    <td>Cuando el valor de la fecha de publicación proveniente de la ingestión se encuentra expresado en formato numerico como datetime o timestamp,  se convierte en fecha con formato string.</td>
   </tr>
    <tr>
-    <td>fix_extraction_inconsistencies</th>
-    <td>ID de la especificación del schema o '0000', '0001', ...</th>
+    <td>fix_extraction_inconsistencies</td>
+    <td>ID de la especificación del schema o '0000', '0001', ...</td>
+    <td>Se trata de diversas operaciones que deben responder a la corrección de los datos de la extracción que no responden correctamente a su categoría. Se trata de operaciones definidas por el usuario en el fichero de configuración _schema.json_ en los atributos _fix_extraction_inconsistencies_.</td>
   </tr>
 <tr>
-    <td rowspan='11'>fixed</th>
-    <td>fill_gaps</th>
-    <td>ID de la especificación del schema o '0000', '0001', ...</th>
+    <td rowspan='11'>fixed</td>
+    <td>fill_gaps</td>
+    <td>ID de la especificación del schema o '0000', '0001', ...</td>
+    <td>Se trata de diversas operaciones que deben responder a la corrección de los datos, por omisión o debidos a errores menores. Son operaciones definidas por el usuario en el fichero de configuración _schema.json_ en los atributos _fill_with_.</td>
   </tr>
 <tr>
     <td rowspan='8'>fixing</th>
     <td>resolve_idems</th>
+    <td>Esta operación permite resolver los valores con contenido referenciado por los pronombres ídem, consultando los valores de registros previos.</td>
   </tr>
 <tr>
     <td>trim_punctuation</th>
+    <td>Esta operación elimina los espacios extras de los extermos.</td>
   </tr>
 <tr>
     <td>numeric_map</th>
+    <td>Con esta operación se convierten los valores no numerico a sus dígitos más probables.</td>
   </tr>
 <tr>
-    <td>not_paragraph_map</th>
+    <td>not_paragraph_map</th> 
+    <td>Con esta operación se eliminan o convierten aquellos caracteres no soportados por campos que no sean parrafos. Por ejemplo signos de admiración o interrogación, etc.</td>
   </tr>
 <tr>
     <td>one_word_map</th>
+     <td>Con esta operación se eliminan o convierten aquellos caracteres no aceptados en campos con una sola palabra, como espacios u otros separadores.</td>
   </tr>
 <tr>
     <td>only_text_map</th>
+     <td>Con esta operación se eliminan o convierten aquellos caracteres que representen dígitos numéricos.</td>
   </tr>
 <tr>
     <td>not_parenthesis_map</th>
+     <td>Con esta operación se eliminan o convierten aquellos caracteres de tipo paréntesis.</td>
   </tr>
 <tr>
     <td>[FIELD_NAME]_map</th>
+     <td>Operaciones de limpieza y sustitución de caracteres definidos en el fichero _config/mapping_to_clean_chars.json_ con el nombre del campo al que hace referencia.</td>
   </tr>
 <tr>
     <td rowspan='2'>calculation</th>
     <td>decrement_data</th>
+    <td>Operació que decrementa la fecha de un campo especificado por paràmetro una cantidad de tiempo contenidos en un campo o expresión del registro y especificados tambien como parámetro.</td>
   </tr>
 <tr>
     <td>data_difference</th>
+     <td>Operació que calcula el periodo existente entre dos fechas contenidos en dos campos de un registro especificados por paràmetro.</td>
   </tr>
 <tr>
     <td rowspan='4'>cleaned</th>
@@ -280,17 +298,21 @@ El segundo nivel permite conocer la razón de los cambios, lo que podríamos lla
   </tr>
 <tr>
     <td>cast_to_number</th>
+    <td>Operació para convertir el dato del campo a tipo numérico. Si no se puede convertir se anula su valor.</td>
   </tr>
 <tr>
     <td>cast_to_boolean</th>
+    <td>Operació para convertir el dato del campo a tipo booleano. Si no se puede convertir se anula su valor.</td>
   </tr>
 <tr>
     <td>...</th>
+    <td>Operació para realizar otros cambios de tipo.</td>
   </tr>
 <tr>
     <td>normalized</th>
     <td>normalized</th>
     <td>normalize_string</th>
+    <td>Operació para nortmalizar los datos de texto convirtiendolos a minúscula y elimnando sus carcateres especiales.</td>
   </tr>
 </table>
 
