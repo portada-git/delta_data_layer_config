@@ -239,7 +239,7 @@ El segundo nivel permite conocer la razón de los cambios, lo que podríamos lla
 <tr>
     <td rowspan='11'>fixed</th>
     <td>fill_gaps</th>
-    <td>D de la especificación del schema o '0000', '0001', ...</th>
+    <td>ID de la especificación del schema o '0000', '0001', ...</th>
   </tr>
 <tr>
     <td rowspan='8'>fixing</th>
