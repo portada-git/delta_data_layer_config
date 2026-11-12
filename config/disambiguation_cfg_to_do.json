@@ -1,0 +1,178 @@
+{
+  "version": 3,
+  "normalize": false,
+  "consensus": {
+    "min_votes": "debe ser una valor dinámico: n/2 + 1",
+    "require_algorithm": false
+  },
+  "labeled_data_path": "revision.ship_entries",
+  "general_config_algorithms": {
+      "levenshtein": {
+        "class": "LevenshteinAlgorithm",
+        "thresholds": [0.95, 0.80],
+        "params": {}
+      },
+      "jaro_winkler": {
+        "class": "JaroWinklerAlgorithm",
+        "thresholds": [0.90],
+        "params": {}
+      },
+      "ngram_2": {
+        "class": "NgramAlgorithm",
+        "thresholds": [0.75],
+        "params": {"n":2}
+      },
+      "ngram_3": {
+        "class": "NgramAlgorithm",
+        "thresholds":  [0.75],
+        "params": {"n": 3}
+      },
+      "ngram_4": {
+        "class": "NgramAlgorithm",
+        "thresholds":  [0.75],
+        "params": {"n": 4}
+      },
+      "phonetic_dm": {
+        "class": "PhoneticDmAlgorithm",
+        "thresholds": [0.9, 0.78],
+        "params": {}
+      },
+      "soundex": {
+        "class": "SoundexALgorithm",
+        "thresholds": [0.9],
+        "params": {}
+      },
+      "fasttext": {
+        "class": "FastTextALgorithm",
+        "thresholds": [0.8,0.6],
+        "params": { "model_path": "models/fasttext/cc.es.300.bin" }
+      },
+      "byt5": {
+        "class": "ByT5Algorithm",
+        "thresholds": [0.9,0.7],
+        "params": { "model_name": "agusnieto77/byt5-portada-contrastivo"}
+      },
+      "text2vec": {
+        "class": "SentenceModelAlgorithm",
+        "thresholds": [0.95, 0.7],
+        "params": { "model_name": "shibing624/text2vec-base-multilingual"}
+      },
+      "sentence_transformer_LABSE": {
+        "class": "SentenceTransformerAlgorithm",
+        "thresholds": [0.95,0.7],
+        "params": {
+          "model": "sentence-transformers/LaBSE"
+        }
+      },
+      "sentence_transformer_mpnet": {
+        "class": "SentenceTransformerAlgorithm",
+        "thresholds": [0.95, 0.7],
+        "params": {"model_name": "paraphrase-multilingual-mpnet-base-v2"}
+      }
+   },
+  "entity_categories":{
+     "port":{
+        "field_l":"citation",
+        "field_r":"voice",
+        "entity_type":"known_entities",
+        "type":"voice-citation",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "ngram_3", "phonetic_dm", "text2vec", "fasttext", "byt5"]
+     },
+     "flag":{
+        "field_l":"citation",
+        "field_r":"voice",
+        "entity_type":"known_entities",
+        "type":"voice-citation",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "ngram_3", "phonetic_dm", "text2vec", "fasttext", "byt5"]
+     },
+     "travel_duration":{
+        "field_l":"citation",
+        "field_r":"voice",
+        "entity_type":"known_entities",
+        "type":"voice-citation",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "byt5"]
+     },
+     "ship_tons":{
+        "field_l":"citation",
+        "field_r":"voice",
+        "entity_type":"known_entities",
+        "type":"voice-citation",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "byt5"]
+     },
+     "ship_type":{
+        "field_l":"citation",
+        "field_r":"voice",
+        "entity_type":"known_entities",
+        "type":"voice-citation",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "phonetic_dm", "byt5"]
+     },
+     "master_role":{
+        "field_l":"citation",
+        "field_r":"voice",
+        "entity_type":"known_entities",
+        "type":"voice-citation",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "phonetic_dm", "byt5"]
+     },
+     "commodity":{
+        "field_l":"citation",
+        "field_r":"voice",
+        "entity_type":"known_entities",
+        "type":"voice-citation",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "ngram_3", "phonetic_dm", "text2vec", "fasttext", "byt5"]
+     },
+     "unit":{
+        "field_l":"citation",
+        "field_r":"voice",
+        "entity_type":"known_entities",
+        "type":"voice-citation",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "byt5"]
+     },
+     "comodity_and_unit":{
+        "entity_type":"multi-entities",
+        "type":"voice-citation",
+        "entities":{
+            "comodity":{
+                "field_l":"cargo_commodity_citation",
+                "field_r":"cargo_commodity_voice",
+                "entity_type":"known_entities",
+                "type":"voice-citation",
+                "algorithms":["levenshtein_ratio", "jaro_winkler", "ngram_3", "phonetic_dm", "text2vec", "fasttext", "byt5"]
+             },
+             "unit":{
+                "field_l":"cargo_unit_citation",
+                "field_r":"cargo_unit_voice",
+                "entity_type":"known_entities",
+                "type":"voice-citation",
+                "algorithms":["levenshtein_ratio", "jaro_winkler", "byt5"]
+             }
+        }
+     },
+     "merchant":{
+        "entity_type":"unknown_entities",
+        "type":"name_and_related_entities",
+        "field_l":"citation",
+        "field_r":"voice",
+        "algorithms":["levenshtein_ratio", "jaro_winkler", "ngram_3", "phonetic_dm", "text2vec", "fasttext", "byt5"],
+        "blocking_rules":[
+        ],
+        "relative_probabilities": [""],
+        "extra_comparisons":[
+            {
+              "sql_condition": "{joint_prob_expr} >= 0.70",
+              "label_for_charts": "Coincidència de rol amb alta certesa combinada"
+            }
+        ]
+     },
+     "master_people":{
+        "entity_type":"unknown_entities",
+        "type":"multi-fields",
+        "blocking_rules":[
+        ],
+        "fields":[
+        ]
+
+        
+["levenshtein_ratio", "jaro_winkler", "ngram_3", "phonetic_dm", "text2vec", "fasttext", "byt5"]
+     },
+     "ship":["levenshtein_ratio", "jaro_winkler", "ngram_3", "phonetic_dm", "text2vec", "fasttext", "byt5"],
+  }
