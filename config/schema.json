@@ -473,7 +473,7 @@
               "publication_name = 'DB'",
               "travel_departure_port is not null",
               "trim(cast(travel_departure_port as string)) != ''",
-              "travel_departure_port != regexp_extract(travel_departure_port, '(?iuU)^(?!en)\\\\s*(\\\\w{2}.*?)(?:\\\\s+en\\\\s+.+\\\\s+[dhm]|:?\\\\s+\\\\w+\\\\s+[dhm]|:?\\\\s+[dhm])?\\\\W*$', 1), travel_departure_port)",
+              "travel_departure_port != regexp_extract(travel_departure_port, '(?iuU)^(?!en)\\\\s*(\\\\w{2}.*?)(?:\\\\s+en\\\\s+.+\\\\s+[dhm]|:?\\\\s+\\\\w+\\\\s+[dhm]|:?\\\\s+[dhm])?\\\\W*$', 1)",
               "travel_departure_port rlike '(?iuU)^(?!en)\\\\s*(\\\\w{2}.*?)(?:\\\\s+en\\\\s+.+\\\\s+[dhm]|:?\\\\s+\\\\w+\\\\s+[dhm]|:?\\\\s+[dhm])?\\\\W*$'"
             ]
           }
