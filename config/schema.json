@@ -671,7 +671,7 @@
               "length(travel_departure_port)>0",
               "travel_departure_port rlike '(?iuU)^(?:(?!escala)(.*?)\\\\W)?(?:(?:[yv] ?)| en | a )?(escalas?)?(?: en)?$'",
               "(travel_port_of_call_list is null or not exists(travel_port_of_call_list, x -> lower(trim(cast(x.port_of_call_place as string))) rlike '(?i)^escalas?$'))",
-              "persed_text rlike '(?iuU)^.*\\\\W[\\\\w ]{1,2}calas?\\\\W.*$'"
+              "parsed_text rlike '(?iuU)^.*\\\\W[\\\\w ]{1,2}calas?\\\\W.*$'"
             ]
           }
         },
