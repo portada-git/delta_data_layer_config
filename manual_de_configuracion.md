@@ -187,10 +187,306 @@ A nivel raíz del schema se permite definir también el atributo _delete_if_ en 
    "delete_if": "parsed_text rlike '(?i).*(?:(?:acorazado)|(?:torpedero)).*'"  
 }
 ```
-Cada uno de los procesos de limpieza extraerá la información pertinente de la configuración y actuará en consecuencia. Existen 9 procesos de limpieza que deben ejecutarse preferiblemente en el orden indicado. 
 
-1) **Completar la estructura acordada**. Llamando al método _complete_accepted_structure_ y pasándole el dataframe a limpiar, forzará la existencia de los campos y forzará que la estructura del dataframe pasado por parametro, coincida exactamente con el schema sin tener en cuenta los tipos de datos, solo se fuerzan los nombres y las estructuras compuestas. Este método no elimina los campos que no figuren en la estructura del schema, ni modifica el contenido de los mismos. Esto permite, si se desea, guardar una copia de los datos originales usando el método _save_original_values_of_ship_entries_ evitando problemas de lectura incoherente cuando la extracción haya producido campos con distintos schemas.  
- 3) **Completar el contenido de los campos de acuerdo a lo indicado en el schema**. El fichero con el schema debe cumplir las especificaciones de un schema JSON con ciertas limitaciones y con información ampliada. No se admiten estructuras flexibles con especificaciones tipo "allOf", "anyOf" ni "if-then". La estructura final solo debe tener una única forma. Sin embargo, los campos de la estructura podrán ser enriquecidos con información extra que será útil para las distintas utilidades de la limpieza. En el método _fill_with_schema_ se usará el atributo _fill_with_ para llenar los campos sin contenido o con contenido incorrecto reconocido. Cada campo de la estructura que sea un campo raíz del schema admite la información formal que permite ejecutar processos de _Spark_ para completar o corregir el contenido de los campos donde esté definido, usando un valor literal, una columna o un cálculo.  EL contenido de _fill_with_ puede ser un objeto o un array de objetos. La forma de array permite definir para un mismo campo múltiples sentencias de relleno/corrección. Los objetos deben disponer de un atributo _type_ el cual puede contener uno de estos valores:   "_replace_", "_replace_if_not_exist_", "_add_array_item_",  "_add_array_from_array_" o "_add_array_from_list_" . También debe tener el atributo _from_ para indicar el origen de los datos a rellenar y opcionalmente el atributo _to_ para indicar donde aplicar el relleno/corrección de los datos cuando se trate de un campo estructurado y la corrección ataña solamente a una parte de la estructura. Opcionalmente se usará el atributo _condition_ para establecer  la condición bajo la cual se realizará el remplazo o la corrección. Veamos algunos ejemplos.
+Cada uno de los procesos de limpieza extraerá la información pertinente de la configuración y actuará en consecuencia. Todos los procesos de limpieza generan metadatos con valores históricos para soportar la trazabilidad de los cambios generados en esta fase.
+
+### Metadatos de los procesos de limpieza y trazabilidad.
+La biblioteca _data_layer_ del proyecto portada, ha buscado un equilibrio para que la  meta-información almacenada tenga suficiente valor informativo respecto a la trazabilidad de los cambios realizados durante la fase de limpieza sin que ello cause un gran deterioro en la eficiencia temporal de los procesos. Para ello se distinguen 3 niveles de metadatos: _registro de operaciones genéricas en el dataframe_, _histórico de valores y operaciones de limpieza para soportar la trazabilidad_ y  _histórico de valores sin soporte a la trazabilidad_.
+
+El primer nivel es un registro detallado de todas las operaciones sufridas en los dataframes durante el proceso de limpieza. Sirve de registro histórico de los cambios realizados a nivel de dataframe (copias de columnas, funciones de spark usada para los cambios de valor de las columnas, eliminación de columnas, etc.). Es útil como registro de operaciones detalladas, columnas implicadas, etc., pero resulta poco practico para el seguimiento de la trazabilidad en limpiezas exhaustivas con un gran número de cambios. Por defecto se encuentra desactivado.
+```
+Ejemplo de registro
+--------------------
+log_id:3471fe4a-24b2-1114-ac41-128a5dfa159
+timestamp:2026-11-03T23:20:13.212459+00:00
+storage id: 34b0f70a-61e1-4013-a4e7-12cf38afc007
+transformer_name: save_original_values_of_entries
+dataframe_name: DF(ingest/ship_entries/*/*/*/*/*/*.json).toDF(["'ai_observations'", "'ai_observations_detailed_value'", "'ai_observations_extraction_source_method'", "'cargo_list'", "'cargo_list_detailed_value'", ..."]).withColumn(["'obs'", 'obs_BAD_CHAR']).drop(["'obs_BAD_CHAR'"])...)
+action: withColumn("'publication_date'", "Column<'CASE WHEN (publication_date IS NULL) THEN publication_date WHEN (publication_date = null) THEN publication_date ELSE translate(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(publication_date, ^\\s*un.?\\s*$, 1, 1), ^\\s*dos\\s*$, 2, 1), ^\\s*tres\\s*$, 3, 1), ^\\s*cuatro\\s*$, 4, 1), ^\\s*cinco\\s*$, 5, 1), ^\\s*seis\\s*$, 6, 1), ^\\s*siete\\s*$, 7, 1), ^\\s*ocho\\s*$, 8, 1), ^\\s*nueve\\s*$, 9, 1), ^\\s*(\\d+) *y? medi[oa], $1.5, 1), ^\\s*(\\d+) *y? cuarto, $1.25, 1), ^\\s*(\\d+) *(?:y )?1 ?/ ?4, $1.25, 1), ^\\s*(\\d+) *(?:y )?1 ?/ ?2, $1.5, 1), ^\\s*(\\d+) *(?:y )?3 ?/ ?4, $1.75, 1), ^\\s*(\\d+) *(?:y )?1 ?/ ?3, $1.34, 1), ^nu[l1][l1]$, , 1), OoQCIil|!tZzASóG&Bög, 00001111112245666889) END'>")
+involved_columns: publication_date
+```
+
+El segundo nivel permite conocer la razón de los cambios, lo que podríamos llamar un "nivel semántico". Requiere una intervención humana en la configuración, pero de ese modo, se consigue almacenar toda la información necesaria para descubrir, en cada caso, que operaciones se han aplicado, cual ha sido la razón de aplicarlas y en qué orden se han ejecutado, a fin de mantener la trazabilidad de los cambios. La operaciones realizadas se clasifican en procesos y estos en etapas según se muestra la tabla siguiente:
+
+<table>
+ <tr>
+    <th>Etapas</th>
+    <th>Procesos</th>
+    <th>Operaciones</th>
+    <th>Descripción</th>
+  </tr>
+   <tr>
+    <td rowspan='6'>fixed_extraction</td>
+    <td rowspan='3'>extraction</td>
+    <td>default_value</td>
+    <td>Durante el proceso de extracción se obtuvo como valor por defecto. Por tanto es posible que el valor no figure en el cuerpo de la noticia.</td>
+  </tr>
+   <tr>
+    <td>original_value</td>
+    <td>El valor se obtuvo directamente de la extracción.</td>
+  </tr>
+   <tr>
+    <td>calculated_value</td>
+    <td>El valor se obtuvo mediante algún método de calculo, por lo que es posible que este valor no figure en el cuerpo de la noticia.</td>
+  </tr>
+   <tr>
+    <td rowspan='2'>boat_fact_model</td>
+    <td>create unique ID</td>
+    <td>El valor se generó durante la lectura de los datos de la ingestión, para asegurar que cada registro dispondrá inequívocamente de un identificador único.</td>
+  </tr>
+   <tr>
+    <td>datetime to string date</td>
+    <td>Cuando el valor de la fecha de publicación proveniente de la ingestión se encuentra expresado en formato numérico como datetime o timestamp,  se convierte en fecha con formato string.</td>
+  </tr>
+   <tr>
+    <td>fix_extraction_inconsistencies</td>
+    <td>ID de la especificación del schema o '0000', '0001', ...</td>
+    <td>Se trata de diversas operaciones que deben responder a la corrección de los datos de la extracción que no responden correctamente a su categoría. Se trata de operaciones definidas por el usuario en el fichero de configuración _schema.json_ en los atributos _fix_extraction_inconsistencies_.</td>
+  </tr>
+<tr>
+    <td rowspan='11'>fixed</td>
+    <td>fill_gaps</td>
+    <td>ID de la especificación del schema o '0000', '0001', ...</td>
+    <td>Se trata de diversas operaciones que deben responder a la corrección de los datos, por omisión o debidos a errores menores. Son operaciones definidas por el usuario en el fichero de configuración _schema.json_ en los atributos _fill_with_.</td>
+  </tr>
+<tr>
+    <td rowspan='8'>fixing</th>
+    <td>resolve_idems</th>
+    <td>Esta operación permite resolver los valores con contenido referenciado por los pronombres ídem, consultando los valores de registros previos.</td>
+  </tr>
+<tr>
+    <td>trim_punctuation</th>
+    <td>Esta operación elimina los espacios extras de los extremos.</td>
+  </tr>
+<tr>
+    <td>numeric_map</th>
+    <td>Con esta operación se convierten los valores no numérico a sus dígitos más probables.</td>
+  </tr>
+<tr>
+    <td>not_paragraph_map</th> 
+    <td>Con esta operación se eliminan o convierten aquellos caracteres no soportados por campos que no sean párrafos. Por ejemplo signos de admiración o interrogación, etc.</td>
+  </tr>
+<tr>
+    <td>one_word_map</th>
+     <td>Con esta operación se eliminan o convierten aquellos caracteres no aceptados en campos con una sola palabra, como espacios u otros separadores.</td>
+  </tr>
+<tr>
+    <td>only_text_map</th>
+     <td>Con esta operación se eliminan o convierten aquellos caracteres que representen dígitos numéricos.</td>
+  </tr>
+<tr>
+    <td>not_parenthesis_map</th>
+     <td>Con esta operación se eliminan o convierten aquellos caracteres de tipo paréntesis.</td>
+  </tr>
+<tr>
+    <td>[FIELD_NAME]_map</th>
+     <td>Operaciones de limpieza y sustitución de caracteres definidos en el fichero _config/mapping_to_clean_chars.json_ con el nombre del campo al que hace referencia.</td>
+  </tr>
+<tr>
+    <td rowspan='2'>calculation</th>
+    <td>decrement_data</th>
+    <td>Operación que decrementa la fecha de un campo especificado por parámetro una cantidad de tiempo contenidos en un campo o expresión del registro y especificados también como parámetro.</td>
+  </tr>
+<tr>
+    <td>data_difference</th>
+     <td>Operación que calcula el periodo existente entre dos fechas contenidos en dos campos de un registro especificados por parámetro.</td>
+  </tr>
+<tr>
+    <td rowspan='4'>cleaned</th>
+    <td rowspan='4'>cleaned</th>
+    <td>cast_to_integer</th>
+  </tr>
+<tr>
+    <td>cast_to_number</th>
+    <td>Operación para convertir el dato del campo a tipo numérico. Si no se puede convertir se anula su valor.</td>
+  </tr>
+<tr>
+    <td>cast_to_boolean</th>
+    <td>Operación para convertir el dato del campo a tipo booleano. Si no se puede convertir se anula su valor.</td>
+  </tr>
+<tr>
+    <td>...</th>
+    <td>Operación para realizar otros cambios de tipo.</td>
+  </tr>
+<tr>
+    <td>normalized</th>
+    <td>normalized</th>
+    <td>normalize_string</th>
+    <td>Operación para normalizar los datos de texto convirtiéndolos a minúscula y eliminando sus caracteres especiales.</td>
+  </tr>
+</table>
+
+Durante el proceso de limpieza, para cada campo y registro se irá añadiendo información relativa a los cambios sufridos. Concretamente se añaden dos campos extras con los sufijos '*_history*' y '*_history_sequence*'. En el primero se almacenan: el último valor obtenido en el proceso, así como la lista de operaciones ejecutadas. Estos datos permitirán consultar la descripción y el detalle de las operaciones almacenadas en la zona de metadatos. Los campos con sufijo '*_history_sequence*', añade información para conocer la secuencia de ejecución de los procesos en cada una de las etapas y permite recuperar fácilmente la información relativa al último proceso ejecutada en cada etapa.
+
+Veamos un ejemplo para el registro 'DB_0000233980', en el que podemos ver que durante la extracción el nombre del puerto se extrajo con texto extra al final del nombre. El proceso de limpieza dispone de una operación específica definida en la configuración y llamada "_delete_last_bad_part_", en el proceso categorizado como _fill_gaps_  que consigue obtener el nombre limpio. Finalmente durante el proceso de normalización el nombre del puerto se normaliza a minúsculas.  
+```
+entry_id: DB_0000233980
+...
+travel_departure_port_history: {'extraction': Row(obtained_value='Id en d.', operations=['default_value', 'original_value']), 'fill_gaps': Row(obtained_value='Id', operations=['delete_last_bad_part']), 'fixing': Row(obtained_value='Alicante', operations=['resolve_idem'])
+'normalized': Row(obtained_value='alicante', operations=['normalize_string'])}
+travel_departure_port_history_sequence: Row(fixed_extraction=['extraction'], fixed=['fill_gaps', 'fixing'], cleaned=['fixing'], normalized=['fixing', 'normalized'])
+...
+```
+Dicho registro contiene solo las operaciones con los cambios realizados para poder identificar fácilmente cuales fueron y la razón por la que se realizaron. El campo con el sufijo  _history_sequence nos permite saber que el valor de extracción contenido en la noticia es 'Id' consultando `reg.travel_departure_port_history[reg.travel_departure_port_history_sequence['extraction][-1]]['obtained_value']`.
+
+Además, como ya se ha comentado, se almacenan también los detalles de todas las operaciones ejecutadas durante la limpieza en el directorio de los metadatos para poder consultar su descripción textual i el detalle de lo ejecutado. Si consultamos la operación de tipo _modify_ identificada por _delete_last_bad_part_ del campo _travel_departure_port_ en el estadio de _cleaning_, obtendremos la siguiente información:
+
+```
+description: Elimina el texto final erróneo.
+detailed_operation: {
+    "type": "replace",
+    "from": {
+        "type": "expr", 
+        "value": "regexp_extract(travel_departure_port, '(?i)^(?!en)\\\\s*(\\\\w{2}.*?)(?:\\\\s+en\\\\s+.+\\\\s+[dhm]|:?\\\\s+\\\\w+\\\\s+[dhm]|:?\\\\s+[dhm])?\\\\W*$', 1)"
+     },     
+    "condition": {
+        "and": [
+            "publication_name = 'DB'", 
+            "travel_departure_port rlike '(?i)^(?!en)\\\\s*(\\\\w{2}.*?)(?:\\\\s+en\\\\s+.+\\\\s+[dhm]|:?\\\\s+\\\\w+\\\\s+[dhm]|:?\\\\s+[dhm])?\\\\W*$'"
+        ]
+    }, 
+    "description": "Elimina el texto final erróneo.", 
+    "id": "delete_last_bad_part", 
+}
+
+```
+El tercer nivel, en realidad es una simplificación del segundo, pues en lugar de almacenar resultados con la secuencia de operaciones que los obtienen, solo se terminan almacenando los resultados obtenidos para cada una de las 4 etapas. Dicho nivel es útil para agilizar el almacenamiento en aplicaciones donde interese conocer la sucesión de datos a grandes rasgos (etapas), ignorando la razón y las operaciones que los producen.
+
+
+### Descripción de los procesos de limpieza
+
+Existen 9 procesos de limpieza que deben ejecutarse preferiblemente en el orden indicado. 
+
+1) **Completar la estructura acordada**. Llamando al método _complete_accepted_structure_ y pasándole el dataframe a limpiar, forzará la existencia de los campos y forzará que la estructura del dataframe pasado por parámetro, coincida exactamente con el schema sin tener en cuenta los tipos de datos, solo se fuerzan los nombres y las estructuras compuestas. En caso de prever una estructura diferente a la esperada, se usará el atributo "_normalize_" para resolver el problema y adaptar la estructura de la extracción a la deseada.  Este método no elimina los campos que no figuren en la estructura del schema, ni modifica el contenido de los mismos. Esto permite, si se desea, guardar una copia de los datos originales usando el método _save_original_values_of_ship_entries_ evitando problemas de lectura incoherente cuando la extracción haya producido campos con distintos schemas.  
+Por ejemplo sabemos que _travel_port_of_call_list_, se ha extraído con diferentes formatos: solo lista de puertos (array de textos) o lista con nombres de puerto y fechas de llegada y salida de cada puerto (array de objetos con dos o tres campos). Para resolver las diferentes alternativas, _normalize_ permite indicar diversas alternativas para conseguir adaptar los resultados de la extracción a la estructura deseada. la configuración de _normalize_ admite:
+```
+"normalize": {
+  "type": "foreach_item",   // o "single" (defecto). "foreach_item" se usa si el campo és un array de estructuras. Se uarà "single" si se trata de un valor estructurado.
+  "options": [ ... ],       // lista de intentos de adaptaciones. Se queda con la primera adaptación que funcione.
+  "otherwise": { ... }      // adaptación si todos los intentos anteriores fallan
+}
+``` 
+En cada una de las opciones se permite definir un _try_cast_to_ con una de las estructuras esperadas y un _equivalence_ que indicará la correspondencia entre estructuras (adaptación de la antigua a la nueva). Veamos un ejemplo:
+
+>Como ya hemos indicado, travel_port_of_call_list, puede llegar con multiples estructuras. Para cada una de ellas indicaremos su adaptación y en caso de fallar todas, definiremos como rellenar la estructura por defecto. 
+
+```
+    ...
+    "travel_port_of_call_list": {
+        "type": "array",
+        "description": "Lista de puertos donde el barco hizo escala.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "port_of_call_place": {
+                    "type": "string",
+                    "description": "Puerto donde hizo la escala.",
+                    "nullable": false,
+                    "for_cleaning": ["accepted_idem", "not_digits"]
+                },
+                "port_of_call_arrival_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Fecha de llegada al puerto de escala.",
+                    "nullable": true
+                },
+                "port_of_call_departure_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Fecha de llegada al puerto de escala.",
+                    "nullable": true
+                }
+            },
+            "required": ["port_of_call_place"],
+            "additionalProperties": false
+        },
+        "normalize": {
+            "type": "foreach_item",
+            "options": [
+                {
+                    "try_cast_to": {
+                        "type": "object",
+                        "properties":{
+                            "port_of_call_place": {
+                                "type": "string"
+                            },
+                            "port_of_call_arrival_date": {
+                                "type": "string"
+                            },
+                            "port_of_call_departure_date": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "equivalence": {
+                        "type": "struct",
+                        "new_value": {
+                            "port_of_call_place": {
+                                "type": "column",
+                                "value": "old_value.port_of_call_place"
+                             },
+                             "port_of_call_arrival_date": {
+                                 "type": "column",
+                                 "value": "old_value.port_of_call_arrival_date"
+                             },
+                             "port_of_call_departure_date": {
+                                 "type": "column",
+                                 "value": "old_value.port_of_call_departure_date"
+                             }
+                        }
+                    }
+                },{
+                    "try_cast_to": {
+                        "type": "string"
+                     },
+                     "equivalence": {
+                         "type": "struct",
+                         "new_value": {
+                             "port_of_call_place": {
+                                  "type": "column",
+                                  "value": "old_value"
+                             },
+                             "port_of_call_arrival_date": {
+                                  "type": "literal",
+                                  "value": null
+                              },
+                              "port_of_call_departure_date": {
+                                  "type": "literal",
+                                  "value": null
+                              }
+                         }
+                     }
+                }
+           ],
+           "otherwise":{
+               "equivalence": {
+                   "type": "struct",
+                   "new_value": {
+                       "port_of_call_place": {
+                            "type": "literal",
+                            "value": null
+                        },
+                        "port_of_call_arrival_date": {
+                            "type": "literal",
+                            "value": null
+                        },
+                        "port_of_call_departure_date": {
+                             "type": "literal",
+                             "value": null
+                        }
+                  }
+             }
+         }
+     },
+     ...
+```
+
+>Cabe observar que si la estructura esperada coincide con la estructura final, debe configurarse también como opción de adaptación para poder definir una alternativa de formato desconocido y evitar cualquier fallo. Con esa configuración lo que se pretende es:
+>Si la estructura coincide, cada campo se copia al correspondiente. Si lo que llega es un array de strings, el valor obtenido se copia a _port_of_call_place_ i el resto se deja a null. En caso de no coincidir ninguna de las anteriores, para evitar un error fatal se define que deberán llenarse todos los datos de la estructura a null.
+
+2) **Corrección de las extracciones incoherentes**. El fichero con el schema debe cumplir las especificaciones de un schema JSON con ciertas limitaciones y con información ampliada. No se admiten estructuras flexibles con especificaciones tipo "allOf", "anyOf" ni "if-then". La estructura final solo debe tener una única forma. Sin embargo, los campos de la estructura podrán ser enriquecidos con información extra que será útil para las distintas utilidades de la limpieza.  Usando el atributo _fix_extraction_inconsistencies_, conseguiremos arreglar aquellos datos de la extracción con valores incoherentes o erróneos.  Este atributo usa la misma sintaxis que el atributo _fill_with_. De hecho solo se diferencia a nivel conceptual y depende del criterio del usuario colocarlo en uno u otro atributo. 
+
+3) **Completar el contenido de los campos de acuerdo a lo indicado en el schema**. El fichero con el schema debe cumplir las especificaciones de un schema JSON con ciertas limitaciones y con información ampliada. No se admiten estructuras flexibles con especificaciones tipo "allOf", "anyOf" ni "if-then". La estructura final solo debe tener una única forma. Sin embargo, los campos de la estructura podrán ser enriquecidos con información extra que será útil para las distintas utilidades de la limpieza. En el método _fill_with_schema_ se usará el atributo _fill_with_ para llenar los campos sin contenido o con contenido incorrecto reconocido. Cada campo de la estructura que sea un campo raíz del schema admite la información formal que permite ejecutar procesos de _Spark_ para completar o corregir el contenido de los campos donde esté definido, usando un valor literal, una columna o un cálculo.  EL contenido de _fill_with_ puede ser un objeto o un array de objetos. La forma de array permite definir para un mismo campo múltiples sentencias de relleno/corrección. Los objetos deben disponer de un atributo _type_ el cual puede contener uno de estos valores:   "_replace_", "_replace_if_not_exist_", "_add_array_item_",  "_add_array_from_array_" o "_add_array_from_list_" . También debe tener el atributo _from_ para indicar el origen de los datos a rellenar y opcionalmente el atributo _to_ para indicar donde aplicar el relleno/corrección de los datos cuando se trate de un campo estructurado y la corrección ataña solamente a una parte de la estructura. Opcionalmente se usará el atributo _condition_ para establecer  la condición bajo la cual se realizará el remplazo o la corrección. Veamos algunos ejemplos.
 _**Uso de _replace_** o **_replace_if_not_exist_**_.  Pueden usarse indistintamente para reemplazar el contenido de un campo por un valor literal, por el valor de otra columna o por un cálculo o expresión soportada por _Spark_. Como su nombre indica, _replace_if_not_exist_ realizará el cambio solamente en aquellas fila cuyo valor del campo al que pertenece el atributo _fill_with_ sea _null_, mientras que _replace_ cambiará el valor en todos los casos si carece de condición o en los casos que cumplan la condición si la hubiese . Ejemplo: 
 
  > _Si durante el proceso de extracción se cambia el nombre de una campo por error, puede arreglarse mediante esta utilidad.  De echo, algunas de las extracciones indicaron la unidad de la capacidad el barco con el nombre del campo "ship_tons_units", pero en el resto fue etiquetado con el nombre correcto de   "ship_tons_unit". Las filas correctas contendrán el valor en dicho campo, mientras que las incorrectas, gracias a la utilidad anterior (complete_accepted_structure), contendrán un valor nulo. Usaremos esta propiedad para indicar que se reemplace por el correspondiente valor da la columna "ship_tons_units"._
@@ -366,7 +662,7 @@ Uso de  _**add_array_from_list**_. En el caso que, para llenar los items dispong
 ```     
 Uso de _ **add_array_item**_. Permite generar un solo item a partir de la fuente. En este caso la fuente no presenta una colección sino un solo item que se añadirá al destino. Ejemplo:
 
-> _En el nodo "argentino", Se añadieron campos simples que debían estar integrados en la estructura de la carga el buque. Por ejemplo, se consensuó que los pasajeros que viajaban en un buque se contemplarían como carga ya que aparecen como tal en la descripción de la misma ("con 50 quintales de trigo y 30 pasajeros"). También se  consensuó que el lastre debía indicarse como mercancía ya que a veces se usaba lastre que no se desechaba sino que tenia propietario y debía devolverse como una mercancía ("en lastre para Juan Gracía De Villavicencio"). En la extracción de los periodicos argentinos se indicó en una campo específico con un valor de (true/false) si el barco entraba en lastre. También se indicó en un campo específico el número de pasajeros que viajaban en la embarcación. Para conseguir integrar dicha información en un item de la lista de la carga, se añadió información pertinente en el campo "cargo_list" de manera que si encuentra un campo llamado "passangers" o "in_ballast", añadan la información relativa como si fuera una carga más._
+> _En el nodo "argentino", Se añadieron campos simples que debían estar integrados en la estructura de la carga el buque. Por ejemplo, se consensuó que los pasajeros que viajaban en un buque se contemplarían como carga ya que aparecen como tal en la descripción de la misma ("con 50 quintales de trigo y 30 pasajeros"). También se  consensuó que el lastre debía indicarse como mercancía ya que a veces se usaba lastre que no se desechaba sino que tenia propietario y debía devolverse como una mercancía ("en lastre para Juan Gracía De Villavicencio"). En la extracción de los periódicos argentinos se indicó en una campo específico con un valor de (true/false) si el barco entraba en lastre. También se indicó en un campo específico el número de pasajeros que viajaban en la embarcación. Para conseguir integrar dicha información en un item de la lista de la carga, se añadió información pertinente en el campo "cargo_list" de manera que si encuentra un campo llamado "passangers" o "in_ballast", añadan la información relativa como si fuera una carga más._
 ```
 ...
     "fill_with": [  
@@ -398,7 +694,7 @@ Uso de _ **add_array_item**_. Permite generar un solo item a partir de la fuente
     ]
 ...
 ```
- Es importante destacar que para adaptarse a los arrays anidados, es posible definir recursivamente la estructura de sustitución. Por ejemplo, en el primer caso anterior, el primer from toma el valor de los campos indicados en to ( cargo_merchant_name y cargo) de forma que el primero valga null pero en el segundo se añada un nuevo item con valores null, null y "en lastre" para los subcampos del subcampo cargo_list indicador en el segundo to (cargo_quantity, cargo_unit, cargo_commodity).   
+ Es importante destacar que para adaptarse a los arrays anidados, es posible definir recursivamente la estructura de sustitución. Por ejemplo, en el primer caso anterior, el primer from toma el valor de los campos indicados en to ( cargo_merchant_name y cargo) de forma que el primero valga null pero en el segundo se añada un nuevo item con valores null, null y "en lastre" para los subcampos del subcampo cargo_list indicador en el segundo to (cargo_quantity, cargo_unit, cargo_commodity). 
 
 3) **Eliminar los registros indicados en el schema**. En el schema se pude definir una atributo extra, en el primer nivel, llamado _delete_if_ donde se pueden indicar las condiciones bajo las que se eliminaran los registros. Este atributo admite un string con una única condición, un objeto de operadores lógicos (and, or) o un array de distintas condiciones. Cada ítem del array se toma de forma independiente y el resultado seria equivalente a usar una única condición operada con 'or'. Ejemplo:
 
@@ -422,8 +718,8 @@ Las indicaciones del atributo _delete_if_ se ejecutaran con el método _delete_i
 
 4) **Eliminar los campos no aceptados en el schema**. El método _prune_unaccepted _fields_ se usa para eliminar los campos generados en la extracción pero no aceptados en el schema. Con todo, esta utilidad mantiene los campos de información valiosa referida a la generación de la extracción y su valor original. Para cada campo del schema la ingestión añadió dos campos extras con los sufijos "extraction_source_method" y  "detailed_value" respectivamente. En el primero se indica el método de generación con la que se obtuvo el valor final extraído. El segundo incluye una relación de valores y métodos usados para generar el valor extraído.  Dichos campos no se eliminaran en este proceso. Aquí solamente se eliminan los campos cuyo nombre no coincida con los definidos en el schema (sin tener el cuenta los de los sufijos). 
 
-6) **Resolución de valores "idem"**. El método _resolve_idems_ se usa para detectar los valores de los campos marcados con la etiqueta "accepted_idem" en el atributo del schema llamado _for_cleaning_, cuyo contenido sea idem o sus variaciones (id, id., etc.). Para cada uno de los registros y campos encontrados se intentan resolver de la siguiente manera:
-    1. Si el tipo del campo no es un array, se busca en el registro anterior o predecesores, un valor válido. Para encontrar los registros anteriores correspondientes a las entradas previas reales (las que figuraban en el periódico, el dataframe debe estar ordenado por nombre, fecha y edición de la publicación fuente además de sus identificadores (entry_id) y particionado por nombre, fecha y edición de la publicación fuente de manera que los valores ídem se resuelvan siempre en el periodico y fecha original y en el orden preciso.
+5) **Resolución de valores "idem"**. El método _resolve_idems_ se usa para detectar los valores de los campos marcados con la etiqueta "accepted_idem" en el atributo del schema llamado _for_cleaning_, cuyo contenido sea idem o sus variaciones (id, id., etc.). Para cada uno de los registros y campos encontrados se intentan resolver de la siguiente manera:
+    1. Si el tipo del campo no es un array, se busca en el registro anterior o predecesores, un valor válido. Para encontrar los registros anteriores correspondientes a las entradas previas reales (las que figuraban en el periódico, el dataframe debe estar ordenado por nombre, fecha y edición de la publicación fuente además de sus identificadores (entry_id) y particionado por nombre, fecha y edición de la publicación fuente de manera que los valores ídem se resuelvan siempre en el periódico y fecha original y en el orden preciso.
     2. Si el tipo de campo es un array, antes de proceder como el proceso anterior, el valor válido se intenta descubrir entre los items anteriores del array. Solamente si al llegar al primer item, el valor se encuentra todavía sin resolver se procede como en el paso 1. Esta metodología tiene en cuenta el la anidación de arrays, por lo que si se trata de un array interno, antes de pasar al proceso 1. se intenta resolver con el ítem superior del array principal.  
 
 6) **Limpieza de campos**. El método _clean_field_values_from_schema_ se usa para limpiar los campos de acuerdo con el nombre del campo, el tipo de dato y  las etiquetas indicadas en el atributo _for_cleaning_ de cada campo. Esta utilidad usa el mapa de caracteres a limpiar pasado a la instancia PortadaCleaning con anterioridad. El nombre del campo permite definir sustituciones específicas para cada uno de ellos. El tipo responde a tratamientos específicos según su tipo, numérico, fecha o texto. Con los numéricos y fechas se intenta convertir cualquier cosa que no sea dígito en un valor numérico usando las especificaciones _numeric_map_ del mapa de limpieza. Los de tipo texto, por defecto, se suponen que admiten varias palabras pero no interrogantes, ni admiración u otros caracteres de texto propios de párrafos. Sin embargo, el tipo texto admite procesos extras usando las etiquetas _for_cleaning_, las cuales indican los diferentes tratamientos que deberán aplicarse. La idea es unificar los campos de tipo texto según las necesidades de limpieza que tengan en común. Actualmente se han especificado las siguientes etiquetas:
@@ -436,17 +732,17 @@ Las indicaciones del atributo _delete_if_ se ejecutaran con el método _delete_i
    - Etiqueta **not_cleanable**. Evita cualquier cambio en los campos así etiquetados.
    - Etiqueta **not_cleanable_if_value_is**. Esta etiqueta admite parámetros para indicar el valor o valores que deberán preservarse de la limpieza. Su sintaxis sería `{"algorithm":"not_cleanable_if_value_is", "params":["<VALOR1>", "<VALOR2>", ...]}`.
 
-  6) **Cálculos**. El método _calculate_from_schema_ aplica los calculos especificados en el atributo _calculable_if_null_ para aquellos valores inexistentes. Actualmente solo se admiten dos tipos de cálculos: "decrement_data" y "data_difference". El primero calcula la fecha previa a partir de un periodo y una fecha inicial. Su sintaxis es: `{"operation": "decrement_data", "parameters":{"origin_date": "<COLUMNA DONDE SE ENCUENTRA LA FECHA INICIAL>", "decrement": "<COLUMNA DONDE SE ENCUENTRA LA DURACIÓN DEL PERIODO a RESTAR>", "decrement_unit": "<COLUMNA CON LA UNIDAD DE TIEMPO APLICADO AL PERIODO>"}}`. 
+  6) **Cálculos**. El método _calculate_from_schema_ aplica los cálculos especificados en el atributo _calculable_if_null_ para aquellos valores inexistentes. Actualmente solo se admiten dos tipos de cálculos: "decrement_data" y "data_difference". El primero calcula la fecha previa a partir de un periodo y una fecha inicial. Su sintaxis es: `{"operation": "decrement_data", "parameters":{"origin_date": "<COLUMNA DONDE SE ENCUENTRA LA FECHA INICIAL>", "decrement": "<COLUMNA DONDE SE ENCUENTRA LA DURACIÓN DEL PERIODO a RESTAR>", "decrement_unit": "<COLUMNA CON LA UNIDAD DE TIEMPO APLICADO AL PERIODO>"}}`. 
   El segundo calcula el tiempo en días, transcurrido entre dos fechas. Su sintaxis es: `{"operation":  "data_difference", "parameters":{"origin_date": "<COLUMNA CON LA FECHA INICIAL>", "final_date":  "<COLUMNA CON LA FECHA FINAL>"}}`.
 
  6) **Convertir los valores al tipo final**. El método _string_to_type_from_schema_ convierte los datos de los campos, que hasta ahora estaban en formato texto al tipo de dato indicado en el schema.
 
- 6) **Normalizar los campo de texto**. El método _normalize_strings_for_ship_entries_ aplica una normalización en los campos de formato texto eliminando caracteres especiales y pasando toto el texto a minúsculas.
+ 6) **Normalizar los campo de texto**. El método _normalize_strings_for_ship_entries_ aplica una normalización en los campos de formato texto eliminando caracteres especiales y pasando todo el texto a minúsculas.
 
 ## Delta Lake
 Los datos se guardan en un Delta Lake organizado en los siguientes directorios:
  - [RAÍZ DEL DELTA LAKE]/[NOMBRE DEL PROYECTO]/ingest/. Aquí se guardan los datos en la fase de ingestión
- - [RAÍZ DEL DELTA LAKE]/[NOMBRE DEL PROYECTO]/bronze/. Aquí se guardan los datos durante la fase de limpieza y noirmalización
+ - [RAÍZ DEL DELTA LAKE]/[NOMBRE DEL PROYECTO]/bronze/. Aquí se guardan los datos durante la fase de limpieza y normalización
  - [RAÍZ DEL DELTA LAKE]/[NOMBRE DEL PROYECTO]/silver/. Aquí se guardan los datos durante la fase de desambiguación y curación
  - [RAÍZ DEL DELTA LAKE]/[NOMBRE DEL PROYECTO]/gold/. Aquí, una vez curados y desambiguados los datos datos se procesan  para volcar-los en la base de datos junto con las reglas de verificación/revocación (bloqueos/links manuales o automáticos para asociar/bloquear las citas a las entidades emergidas en el proceso de desambiguación) que se decidan. 
 
@@ -479,16 +775,16 @@ _Portada data layer_ dispone de las siguientes clases principales para procesar 
     Métodos:
         1) _**use_schema**( diccionario_JSON_con_schema ). Asigna el diccionario con el schema a la instancia que procesará la limpieza.
         1) _**use_mapping_to_clean_chars**( diccionario_JSON_con_mapa_caracteres ). Asigna el diccionario con los mapas de caracteres para realizar la limpieza.
-        1) _**read_raw_entries**( force_all )_. Lee los datos almacenados en la fase de ingestión. Les registros ya procesados una vez finalizado todo el proceso de limpieza, se marcaran mediante una marca que indicará que estan límipios de manera que el proceso afecte solamente a los registros no procesados todavía. Sin embargo, usando el parámetro   _forca_all_ se podrá indicar que se desea volver a procesar todos los registros incluidos los que ya se hayan limpiado.
+        1) _**read_raw_entries**( force_all )_. Lee los datos almacenados en la fase de ingestión. Les registros ya procesados una vez finalizado todo el proceso de limpieza, se marcaran mediante una marca que indicará que están limpios de manera que el proceso afecte solamente a los registros no procesados todavía. Sin embargo, usando el parámetro   _force_all_ se podrá indicar que se desea volver a procesar todos los registros incluidos los que ya se hayan limpiado.
         1) _**complete_accepted_structure**( raw_dataframe)_. Asegura que la estructura mínima del dataframe coincide con la descrita en el schema. Devuelve el dataframe corregido. Este proceso solo añade los campos y estructuras definidos en el schema, que no existan. No elimina los campos extras que no aparecen en el. Además, como no todos los ficheros con los datos extraídos contienen meta-información relativa al proceso de extracción, en este proceso se añade y normaliza de manera que todos los campos del schema dispongan de ella.
-        2) _**fix_field_consistency_errors**( dataframe )_. En diseño. Necesario si se quiere mantener como metadato el valor de extracción original coherente en lugar del erróneo. Este método contendría la parte de fill_with correspondiente a procesos de corrección de la coherencia de los campos.
-       2) _**save_original_values_of_ship_entries**( dataframe )_. Guarda los datos originales de las entradas con las correcciones realizada hasta el momento en la fase de limpieza ("bronze") en la subruta "original_data/ship_entries" y organizados por periódicos.
-       2) _**read_original_values_of_ship_entries**( force_all )_ Lee los registros aun no limpios del dataframe guardado mediante el método anterior. Puede forzarse la lectura de todos los registros mediante el parámetro _force_all_.
-        3) _**fill_with_schema**( dataframe )_. Completa o corrige los campos del dataframe usando la configuración del atributo _fill_with_ de cada campo del schema. Devuelve el dataframe corregido.
-        1) _**delete_if_from_schema**( dataframe )_. Atendiendo al atributo _delete_if_ del schema, eliminarà los registros que cumplan las condiciones indicadas.
-        1) _**prune_unaccepted_fields**( dataframe, simplify_meta_fields)_ Se desprende de los campos no aceptados en el schama a execpción de los metadatos incluidos en el proceso de ingestión para controlar la trazabilidad. El parametro _simplify_metafields_ permite indicar si se desea simplificar las estructuras de los campos con meta-información (sufijos "detailed_value" y "origianl_data_method") reduciendo la información a un solo campo con sufijo  "original_value" el cual contendrá solo el valor y se perderá la información del método usado para conseguir dicho valor.
-         1) _**resolve_idems**( dataframe )_. Procesa los campos indicados medianet la etiqueta _accepted_idem_ en el atributo _for_cleaning_ que contengan ídem o sinónimos recuperando los valores de los registros antecesores.
-         1) _**clean_field_values_from_schema**( dataframe )_. Realiza una limpieza de los campos segun su nombre,  tipo y etiquetado del atributo _for_cleaning_ en concordancia del los mapas de limpieza de caracteres.
+        2) _**save_original_values_of_ship_entries**( dataframe )_. Guarda los datos originales de las entradas con las correcciones realizada hasta el momento en la fase de limpieza ("bronze") en la subruta "original_data/ship_entries" y organizados por periódicos.
+        2) _**read_original_values_of_ship_entries**( force_all )_ Lee los registros aun no limpios del dataframe guardado mediante el método anterior. Puede forzarse la lectura de todos los registros mediante el parámetro _force_all_.
+        2) _**fix_extraction_inconsistencies_schema**( dataframe )_. Necesario si se quiere mantener como metadato el valor de extracción original coherente en lugar del erróneo. Este método recibe el contenido del atributo _fix_extraction_inconsistencies_ con una sintaxis idéntica a la usada por el atributo fill_with.
+        2) _**fill_with_schema**( dataframe )_. Completa o corrige los campos del dataframe usando la configuración del atributo _fill_with_ de cada campo del schema. Devuelve el dataframe corregido.
+        1) _**delete_if_from_schema**( dataframe )_. Atendiendo al atributo _delete_if_ del schema, eliminará los registros que cumplan las condiciones indicadas.
+        1) _**prune_unaccepted_fields**( dataframe, simplify_meta_fields)_ Se desprende de los campos no aceptados en el schema a excepción de los metadatos incluidos en el proceso de ingestión para controlar la trazabilidad. El parametro _simplify_metafields_ permite indicar si se desea simplificar las estructuras de los campos con meta-información (sufijos "detailed_value" y "origianl_data_method") reduciendo la información a un solo campo con sufijo  "original_value" el cual contendrá solo el valor y se perderá la información del método usado para conseguir dicho valor.
+         1) _**resolve_idems**( dataframe )_. Procesa los campos indicados mediante la etiqueta _accepted_idem_ en el atributo _for_cleaning_ que contengan ídem o sinónimos recuperando los valores de los registros antecesores.
+         1) _**clean_field_values_from_schema**( dataframe )_. Realiza una limpieza de los campos según su nombre,  tipo y etiquetado del atributo _for_cleaning_ en concordancia del los mapas de limpieza de caracteres.
          1) _**calculate_from_schema**( dataframe ). Realiza los cálculos predefinidos (_data_difference_ o _decrement_data_) indicados en los campos con atributo _calculable_if_null_ para los registros sin valor.
          1) _**string_to_type_from_schema**( dataframe )_. Convierte los campos al tipo indicado en el esquema. Hasta aquí todos los datos simples se han conservado con formato de texto con independencia del tipo final. Además añade el valor del campo a uno extra llamado [NOMBRE_ORIGINAL_DEL_CAMPO]_cleaned. 
          1) _**normalize_strings_for_ship_entries**( dataframe )_ . Normaliza los datos eliminado o convirtiendo caracteres superiores al código 128 en otros compatibles, convierte todas la mayúsculas a minúsculas.  Además añade el valor del campo a uno extra llamado [NOMBRE_ORIGINAL_DEL_CAMPO]_normalized. 
